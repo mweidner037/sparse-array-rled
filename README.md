@@ -18,7 +18,6 @@ Setup and package versions should be current as of Feb 19 2023.
 
 ## TODO
 
-- Delete `.git`, then setup your own Git repo.
 - Search for TODO.
 - Write your library in `src/`.
 - Replace this README.

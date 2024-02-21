@@ -1,7 +1,7 @@
 {
-  "name": "TODO",
+  "name": "rle-sparse-array",
   "version": "0.1.0",
-  "description": "TODO",
+  "description": "Run-length encoded sparse array",
   "author": "Matthew Weidner",
   "license": "MIT",
   "bugs": {
@@ -13,7 +13,8 @@
     "url": "git+https://github.com/mweidner037/TODO.git"
   },
   "keywords": [
-    "TODO"
+    "sparse array",
+    "run-length encoding"
   ],
   "main": "build/commonjs/index.js",
   "browser": "build/esm/index.js",
