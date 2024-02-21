@@ -1,34 +1,34 @@
-function appendPresent<T>(state: (T[] | number)[], item: T[]): void {
-  if (item.length === 0) return;
+function appendPresent<T>(state: (T[] | number)[], present: T[]): void {
+  if (present.length === 0) return;
   if (state.length % 2 === 0) {
     // Empty, or ends with deleted item.
-    state.push(item);
+    state.push(present);
   } else {
     // Non-empty and ends with present item.
-    (state[state.length - 1] as T[]).push(...item);
+    (state[state.length - 1] as T[]).push(...present);
   }
 }
 
-function appendDeleted<T>(state: (T[] | number)[], item: number): void {
-  if (item === 0) return;
+function appendDeleted<T>(state: (T[] | number)[], deleted: number): void {
+  if (deleted === 0) return;
   if (state.length % 2 === 1) {
     // Non-empty and ends with present item.
-    state.push(item);
+    state.push(deleted);
   } else if (state.length === 0) {
     // Empty.
-    state.push([], item);
+    state.push([], deleted);
   } else {
     // Non-empty and ends with deleted item.
-    (state[state.length - 1] as number) += item;
+    (state[state.length - 1] as number) += deleted;
   }
 }
 
-function append<T>(
+function appendItem<T>(
   state: (T[] | number)[],
   item: T[] | number,
-  present: boolean
+  isPresent: boolean
 ): void {
-  if (present) appendPresent(state, item as T[]);
+  if (isPresent) appendPresent(state, item as T[]);
   else appendDeleted(state, item as number);
 }
 
@@ -39,10 +39,16 @@ function splice<T>(
   state: (T[] | number)[],
   start: number,
   end: number,
-  newItems: (T[] | number)[],
-  // TODO: make newItems normal instead?
-  firstNewPresent: boolean
+  newItems: (T[] | number)[]
 ): void {
+  // Convert newItems to a form where the first item is nontrivial
+  // but not necessarily present (tracked by firstNewPresent).
+  let firstNewPresent = true;
+  if (newItems.length !== 0 && (newItems[0] as T[]).length === 0) {
+    newItems.shift();
+    firstNewPresent = false;
+  }
+
   if (newItems.length !== 0 && start !== 0) {
     // Try to merge newItems[0] with state[start - 1].
     if (firstNewPresent) {
@@ -247,21 +253,16 @@ export class SparseArray<T> {
     // Items [sI, eI] are replaced (not kept in their entirely).
     // sI and eI may be partially kept; we replace the original item
     // with a slice added to newItems.
-    let replacedItems: (T[] | number)[];
+    const replacedItems: (T[] | number)[] = [];
     if (sI === eI) {
       // replacedItems = [start.slice(sOffset, eOffset)]
-      if (sI % 2 === 0) {
-        replacedItems = [(this.state[sI] as T[]).slice(sOffset, eOffset)];
-      } else replacedItems = [[], eOffset - sOffset];
+      this.appendItemSlice(replacedItems, sI, sOffset, eOffset);
     } else {
       // replacedItems = [start.slice(sOffset), ...this.state.slice(sI + 1, eI), end.slice(0, eOffset)]
-      if (sI % 2 === 0) {
-        replacedItems = [(this.state[sI] as T[]).slice(sOffset)];
-      } else replacedItems = [[], (this.state[sI] as number) - sOffset];
+      this.appendItemSlice(replacedItems, sI, sOffset);
+      // Alternation guaranteed - don't need to use append...().
       for (let i = sI + 1; i < eI; i++) replacedItems.push(this.state[i]);
-      if (eI % 2 === 0) {
-        replacedItems.push((this.state[eI] as T[]).slice(0, eOffset));
-      } else replacedItems.push(eOffset);
+      this.appendItemSlice(replacedItems, eI, 0, eOffset);
     }
 
     // newItems = [
@@ -269,13 +270,96 @@ export class SparseArray<T> {
     //     values,
     //     end.slice(eOffset) if non-empty
     // ]
-    const newItems: (T[] | number[])[] = [];
+    const newItems: (T[] | number)[] = [];
     if (sOffset !== 0) {
-      // TODO
+      this.appendItemSlice(newItems, sI, 0, sOffset);
+    }
+    appendPresent(newItems, values);
+    const endLength =
+      eI % 2 === 0
+        ? (this.state[eI] as T[]).length
+        : (this.state[eI] as number);
+    if (eOffset !== endLength) {
+      this.appendItemSlice(newItems, eI, eOffset, endLength);
     }
 
     splice(this.state, sI, eI + 1, newItems);
     return new SparseArray(replacedItems, values.length);
+  }
+
+  private setOrDelete(
+    index: number,
+    values: T[],
+    isPresent: true
+  ): SparseArray<T>;
+  private setOrDelete(
+    index: number,
+    deleteCount: number,
+    isPresent: false
+  ): SparseArray<T>;
+  private setOrDelete(
+    index: number,
+    item: T[] | number,
+    isPresent: boolean
+  ): SparseArray<T> {
+    const count = isPresent ? (item as T[]).length : (item as number);
+
+    // Optimize common case: append.
+    if (index >= this._length) {
+      appendDeleted(this.state, index - this._length);
+      appendItem(this.state, item, isPresent);
+      this._length = index + count;
+      return SparseArray.empty(count);
+    }
+
+    // Avoid past-end edge case.
+    if (this._length < index + count) {
+      appendDeleted(this.state, index + count - this._length);
+      this._length = index + count;
+    }
+
+    // Avoid trivial-item edge case.
+    // Note that we still update this.length above, for consistency.
+    if (count === 0) return SparseArray.empty();
+
+    const [sI, sOffset] = this.locate(index);
+    const [eI, eOffset] = this.locate(count, true, sI, sOffset);
+
+    // Items [sI, eI] are replaced (not kept in their entirely).
+    // sI and eI may be partially kept; we replace the original item
+    // with a slice added to newItems.
+    const replacedItems: (T[] | number)[] = [];
+    if (sI === eI) {
+      // replacedItems = [start.slice(sOffset, eOffset)]
+      this.appendItemSlice(replacedItems, sI, sOffset, eOffset);
+    } else {
+      // replacedItems = [start.slice(sOffset), ...this.state.slice(sI + 1, eI), end.slice(0, eOffset)]
+      this.appendItemSlice(replacedItems, sI, sOffset);
+      // Alternation guaranteed - don't need to use append...().
+      for (let i = sI + 1; i < eI; i++) replacedItems.push(this.state[i]);
+      this.appendItemSlice(replacedItems, eI, 0, eOffset);
+    }
+
+    // newItems = [
+    //     start.slice(0, sOffset) if non-empty,
+    //     values,
+    //     end.slice(eOffset) if non-empty
+    // ]
+    const newItems: (T[] | number)[] = [];
+    if (sOffset !== 0) {
+      this.appendItemSlice(newItems, sI, 0, sOffset);
+    }
+    appendItem(newItems, item, isPresent);
+    const endLength =
+      eI % 2 === 0
+        ? (this.state[eI] as T[]).length
+        : (this.state[eI] as number);
+    if (eOffset !== endLength) {
+      this.appendItemSlice(newItems, eI, eOffset, endLength);
+    }
+
+    splice(this.state, sI, eI + 1, newItems);
+    return new SparseArray(replacedItems, count);
   }
 
   /**
@@ -311,15 +395,15 @@ export class SparseArray<T> {
    * Appends this.state[index].slice(start, end) to items, preserving items's
    * SparseArray format.
    */
-  private appendSlice(
+  private appendItemSlice(
     items: (T[] | number)[],
     index: number,
     start: number,
-    end: number
+    end?: number
   ): void {
     if (index % 2 === 0) {
       appendPresent(items, (this.state[index] as T[]).slice(start, end));
-    } else appendDeleted(items, end - start);
+    } else appendDeleted(items, (end ?? (this.state[index] as number)) - start);
   }
 
   trim(): void {
