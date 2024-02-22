@@ -32,66 +32,6 @@ function appendItem<T>(
   else appendDeleted(state, item as number);
 }
 
-/**
- * Replaces [start, end) in state with newItems, repairing the format as needed.
- *
- * Assumes newItems is non-empty. Note: it will be mutated.
- */
-function splice<T>(
-  state: (T[] | number)[],
-  start: number,
-  end: number,
-  newItems: (T[] | number)[]
-): void {
-  let firstNewPresent = true;
-
-  if (start !== 0) {
-    // Convert newItems to a form where the first item is nontrivial
-    // but not necessarily present (tracked by firstNewPresent).
-    if (newItems.length !== 0 && (newItems[0] as T[]).length === 0) {
-      newItems.shift();
-      firstNewPresent = false;
-    }
-
-    // Try to merge newItems[0] with state[start - 1].
-    if (firstNewPresent) {
-      if (start % 2 === 1) {
-        const firstNew = newItems.shift() as T[];
-        (state[start - 1] as T[]).push(...firstNew);
-        firstNewPresent = !firstNewPresent;
-      }
-    } else {
-      if (start % 2 === 0) {
-        const firstNew = newItems.shift() as number;
-        (state[start - 1] as number) += firstNew;
-        firstNewPresent = !firstNewPresent;
-      }
-    }
-  }
-  // Now we have the invariant: if start != 0, newItems[0] is nontrivial
-  // and of opposite type from state[start]. (TODO: not nec nontrivial - newItems might be empty now.)
-
-  if (newItems.length !== 0 && end !== state.length) {
-    // Try to merge newItems[last] with state[end].
-    const lastNewPresent = firstNewPresent !== (newItems.length % 2 === 0);
-    if (lastNewPresent) {
-      if (end % 2 === 0) {
-        (newItems[newItems.length - 1] as T[]).push(...(state[end] as T[]));
-        end++;
-      }
-    } else {
-      if (end % 2 === 1) {
-        (newItems[newItems.length - 1] as number) += state[end] as number;
-        end++;
-      }
-    }
-  }
-
-  // TODO: start = 0 / [] item cases?
-  // TODO: start/end wrong parity cases (e.g. w/o newItems)
-  state.splice(start, end - start, ...newItems);
-}
-
 export class SparseArray<T> {
   protected readonly state: (T[] | number)[];
   protected _length: number;
@@ -305,9 +245,8 @@ export class SparseArray<T> {
     const [sI, sOffset] = this.locate(index);
     const [eI, eOffset] = this.locate(count, true, sI, sOffset);
 
-    // Items in the range [sI, eI] are replaced (not kept in their entirely).
-    // sI and eI may be partially kept; if so, we splice out the original item
-    // and replace it with one in newItems.
+    // Items in the range [sI, eI] are replaced (not kept in their entirety).
+    // sI and eI may be partially kept; if so, we add the kept slices to newItems.
     const replacedItems: (T[] | number)[] = [];
     if (sI === eI) {
       // replacedItems = [start.slice(sOffset, eOffset)]
@@ -315,7 +254,7 @@ export class SparseArray<T> {
     } else {
       // replacedItems = [start.slice(sOffset), ...this.state.slice(sI + 1, eI), end.slice(0, eOffset)]
       this.appendItemSlice(replacedItems, sI, sOffset);
-      // Alternation guaranteed - don't need to use append...().
+      // Alternation guaranteed - don't need to use appendItem().
       for (let i = sI + 1; i < eI; i++) replacedItems.push(this.state[i]);
       this.appendItemSlice(replacedItems, eI, 0, eOffset);
     }
@@ -338,7 +277,16 @@ export class SparseArray<T> {
       this.appendItemSlice(newItems, eI, eOffset, endLength);
     }
 
-    splice(this.state, sI, eI + 1, newItems);
+    // Append the trailing kept items (> eI) to newItems.
+    if (eI + 1 < this.state.length) {
+      appendItem(newItems, this.state[eI + 1], eI % 2 === 1);
+      for (let i = eI + 2; i < this.state.length; i++) {
+        // Alternation guaranteed - don't need to use appendItem.
+        newItems.push(this.state[i]);
+      }
+    }
+
+    this.state.splice(sI, Infinity, ...newItems);
     return new SparseArray(replacedItems, count);
   }
 
