@@ -1,5 +1,5 @@
 import { SparseArray } from "../src";
-import { append } from "./traces";
+import { append, backspace, frontAndBack, randomDeletes } from "./traces";
 import { BenchmarkTrace, SparseArrayType, timeOne } from "./util";
 
 const arrTypes: SparseArrayType[] = [
@@ -9,7 +9,12 @@ const arrTypes: SparseArrayType[] = [
   },
 ];
 
-const traces: BenchmarkTrace[] = [append];
+const traces: BenchmarkTrace[] = [
+  append,
+  backspace,
+  randomDeletes,
+  frontAndBack,
+];
 
 void (async function () {
   for (const trace of traces) {
