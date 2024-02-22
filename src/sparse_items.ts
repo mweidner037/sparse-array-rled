@@ -39,11 +39,7 @@ export abstract class SparseItems<I> {
    *
    * Preferably modify item in-place and return it.
    */
-  protected abstract itemUpdate(
-    item: I,
-    index: number,
-    replace: I
-  ): [item: I, replaced: I];
+  protected abstract itemUpdate(item: I, index: number, replace: I): I;
 
   /**
    * Preferably modify item in-place and return it.
@@ -115,34 +111,34 @@ export abstract class SparseItems<I> {
 
     if (sI === eI) {
       // Optimize some easy cases that only touch one item (start).
-      if (isPresent === (sI % 2 === 0)) {
-        // No type changes, just replacing values within start.
-        if (isPresent) {
-          let replacedValues: I;
-          [this.state[sI], replacedValues] = this.itemUpdate(
-            this.state[sI] as I,
-            sOffset,
-            item as I
-          );
-          return this.construct([replacedValues], count);
-        } else return this.constructEmpty(count);
-      } else if (!isPresent && sOffset > 0) {
-        // Deleting values at the middle/end of start.
+      if (sI % 2 === 0) {
         const start = this.state[sI] as I;
-        const replacedValues = this.itemSlice(start, sOffset, eOffset);
-        if (eOffset < this.itemLength(start)) {
-          const trailingValues = this.itemSlice(start, eOffset);
+        if (isPresent) {
+          // Just replacing values within start.
+          const replacedValues = this.itemSlice(start, sOffset, eOffset);
+          this.state[sI] = this.itemUpdate(start, sOffset, item as I);
+          return this.construct([replacedValues], count);
+        } else if (sOffset > 0) {
+          // Deleting values at the middle/end of start.
+          const replacedValues = this.itemSlice(start, sOffset, eOffset);
+          if (eOffset < this.itemLength(start)) {
+            const trailingValues = this.itemSlice(start, eOffset);
+            this.state.splice(sI + 1, 0, count, trailingValues);
+          } else {
+            if (sI + 1 === this.state.length) this.state.push(count);
+            else (this.state[sI + 1] as number) += count;
+          }
           this.state[sI] = this.itemShorten(start, sOffset);
-          this.state.splice(sI + 1, 0, count, trailingValues);
-        } else {
-          this.state[sI] = this.itemShorten(start, sOffset);
-          if (sI + 1 < this.state.length) {
-            (this.state[sI + 1] as number) += count;
-          } else this.state.push(count);
+          return this.construct([replacedValues], count);
         }
-        return this.construct([replacedValues], count);
+      } else {
+        if (!isPresent) {
+          // No change: deleted -> deleted.
+          return this.constructEmpty(count);
+        }
       }
-      // Else fall through to default case.
+
+      // Remaining cases fall through to default behavior.
     }
 
     // Items in the range [sI, eI] are replaced (not kept in their entirety).
