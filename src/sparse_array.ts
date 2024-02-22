@@ -1,4 +1,5 @@
 function appendPresent<T>(state: (T[] | number)[], present: T[]): void {
+  // OPT: Enforce non-zero length, so we can skip this check.
   if (present.length === 0) return;
   if (state.length % 2 === 0) {
     // Empty, or ends with deleted item.
