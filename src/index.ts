@@ -1,1 +1,1 @@
-export * from "./sparse_array_direct";
+export * from "./sparse_array";
