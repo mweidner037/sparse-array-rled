@@ -16,7 +16,7 @@ export class ListPositionsSparseArray<T> implements ISparseArray<T> {
     return new ListPositionsSparseArray(replaced);
   }
 
-  delete(index: number, count = 0): ISparseArray<T> {
+  delete(index: number, count = 1): ISparseArray<T> {
     let replaced: SparseItems<T[]>;
     [this.items, replaced] = man.delete(this.items, index, count);
     return new ListPositionsSparseArray(replaced);
