@@ -1,7 +1,8 @@
 import seedrandom from "seedrandom";
-import { SparseArrayType } from "./util";
+import martinTraceEditsRaw from "./martin_trace.json";
+import { ISparseArray, SparseArrayType } from "./util";
 
-// Each trace performs 1,000,000 set/delete ops.
+// Each basic trace performs 1,000,000 set/delete ops.
 
 export function append(arrType: SparseArrayType): void {
   for (let t = 0; t < 10000; t++) {
@@ -47,6 +48,33 @@ export function frontAndBack(arrType: SparseArrayType): void {
       for (let i = 0; i < 5; i++) {
         arr.delete(11 * j - i - 1);
       }
+    }
+  }
+}
+
+const martinTraceEdits = martinTraceEditsRaw as unknown as Array<
+  | {
+      type: "set";
+      bunchID: string;
+      index: number;
+      value: string;
+    }
+  | { type: "delete"; bunchID: string; index: number }
+>;
+
+export function martinTrace(arrType: SparseArrayType): void {
+  const list = new Map<string, ISparseArray<string>>();
+  for (const edit of martinTraceEdits) {
+    if (edit.type === "set" ) {
+      let arr = list.get(edit.bunchID);
+      if (arr === undefined) {
+        arr = arrType.construct<string>();
+        list.set(edit.bunchID, arr);
+      }
+      arr.set(edit.index, edit.value);
+    } else {
+      const arr = list.get(edit.bunchID)!;
+      arr.delete(edit.index);
     }
   }
 }
