@@ -33,6 +33,8 @@ function appendItem<T>(
 }
 
 /**
+ * Replaces [start, end) in state with newItems, repairing the format as needed.
+ *
  * Assumes newItems is non-empty. Note: it will be mutated.
  */
 function splice<T>(
@@ -41,15 +43,16 @@ function splice<T>(
   end: number,
   newItems: (T[] | number)[]
 ): void {
-  // Convert newItems to a form where the first item is nontrivial
-  // but not necessarily present (tracked by firstNewPresent).
   let firstNewPresent = true;
-  if (newItems.length !== 0 && (newItems[0] as T[]).length === 0) {
-    newItems.shift();
-    firstNewPresent = false;
-  }
 
-  if (newItems.length !== 0 && start !== 0) {
+  if (start !== 0) {
+    // Convert newItems to a form where the first item is nontrivial
+    // but not necessarily present (tracked by firstNewPresent).
+    if (newItems.length !== 0 && (newItems[0] as T[]).length === 0) {
+      newItems.shift();
+      firstNewPresent = false;
+    }
+
     // Try to merge newItems[0] with state[start - 1].
     if (firstNewPresent) {
       if (start % 2 === 1) {
@@ -65,6 +68,8 @@ function splice<T>(
       }
     }
   }
+  // Now we have the invariant: if start != 0, newItems[0] is nontrivial
+  // and of opposite type from state[start]. (TODO: not nec nontrivial - newItems might be empty now.)
 
   if (newItems.length !== 0 && end !== state.length) {
     // Try to merge newItems[last] with state[end].
@@ -82,6 +87,8 @@ function splice<T>(
     }
   }
 
+  // TODO: start = 0 / [] item cases?
+  // TODO: start/end wrong parity cases (e.g. w/o newItems)
   state.splice(start, end - start, ...newItems);
 }
 
@@ -179,6 +186,13 @@ export class SparseArray<T> {
       size += (this.state[i] as T[]).length;
     }
     return size;
+  }
+
+  isEmpty(): boolean {
+    return (
+      this.state.length === 0 ||
+      (this.state.length === 2 && (this.state[0] as T[]).length === 0)
+    );
   }
 
   hasGet(index: number): [has: boolean, get: T | undefined] {
@@ -285,15 +299,15 @@ export class SparseArray<T> {
     }
 
     // Avoid trivial-item edge case.
-    // Note that we still update this._length above, for consistency.
+    // Note that we still update this._length above.
     if (count === 0) return SparseArray.empty();
 
     const [sI, sOffset] = this.locate(index);
     const [eI, eOffset] = this.locate(count, true, sI, sOffset);
 
-    // Items [sI, eI] are replaced (not kept in their entirely).
-    // sI and eI may be partially kept; we replace the original item
-    // with a slice stored in newItems.
+    // Items in the range [sI, eI] are replaced (not kept in their entirely).
+    // sI and eI may be partially kept; if so, we splice out the original item
+    // and replace it with one in newItems.
     const replacedItems: (T[] | number)[] = [];
     if (sI === eI) {
       // replacedItems = [start.slice(sOffset, eOffset)]
@@ -308,7 +322,7 @@ export class SparseArray<T> {
 
     // newItems = [
     //     start.slice(0, sOffset) if non-empty,
-    //     values,
+    //     item,
     //     end.slice(eOffset) if non-empty
     // ]
     const newItems: (T[] | number)[] = [];
@@ -343,8 +357,8 @@ export class SparseArray<T> {
     i = 0,
     offset = 0
   ): [i: number, offset: number] {
-    let remaining = indexDiff;
-    if (offset !== 0) remaining += offset;
+    // Reset remaining to the start of index i.
+    let remaining = indexDiff + offset;
 
     for (; i < this.state.length; i++) {
       const itemLength =
@@ -354,6 +368,7 @@ export class SparseArray<T> {
       }
       remaining -= itemLength;
     }
+
     throw new Error("Internal error: past end");
   }
 
