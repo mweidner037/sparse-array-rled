@@ -35,7 +35,7 @@ function appendItem<T>(
   else appendDeleted(state, item as number);
 }
 
-export class SparseArray<T> {
+export class SparseArrayDirect<T> {
   protected readonly state: (T[] | number)[];
   protected _length: number;
 
@@ -44,12 +44,12 @@ export class SparseArray<T> {
     this._length = length;
   }
 
-  static empty<T>(length = 0): SparseArray<T> {
+  static empty<T>(length = 0): SparseArrayDirect<T> {
     if (length === 0) return new this([], 0);
     else return new this([[], length], length);
   }
 
-  static fromUnsafe<T>(state: (T[] | number)[]): SparseArray<T> {
+  static fromUnsafe<T>(state: (T[] | number)[]): SparseArrayDirect<T> {
     let length = 0;
     for (let i = 0; i < state.length; i++) {
       if (i % 2 === 0) length += (state[i] as T[]).length;
@@ -58,7 +58,7 @@ export class SparseArray<T> {
     return new this(state, length);
   }
 
-  static from<T>(state: (T[] | number)[]): SparseArray<T> {
+  static from<T>(state: (T[] | number)[]): SparseArrayDirect<T> {
     // Defensive deep copy.
     // TODO: also correctness checks?
     const copy = new Array<T[] | number>(state.length);
@@ -80,7 +80,7 @@ export class SparseArray<T> {
   static fromEntries<T>(
     entries: Iterable<[index: number, value: T]>,
     length?: number
-  ): SparseArray<T> {
+  ): SparseArrayDirect<T> {
     // The current last item in state, which is always present.
     let curPresent: T[] = [];
     const state: (T[] | number)[] = [curPresent];
@@ -194,7 +194,7 @@ export class SparseArray<T> {
    * @returns The replaced values, as a sparse array whose index 0 corresponds
    * to our index, and whose length is values.length (untrimmed).
    */
-  set(index: number, ...values: T[]): SparseArray<T> {
+  set(index: number, ...values: T[]): SparseArrayDirect<T> {
     return this.setOrDelete(index, values, true);
   }
 
@@ -205,7 +205,7 @@ export class SparseArray<T> {
    * @returns The replaced values, as a sparse array whose index 0 corresponds
    * to our index, and whose length is count (untrimmed).
    */
-  delete(index: number, count = 1): SparseArray<T> {
+  delete(index: number, count = 1): SparseArrayDirect<T> {
     // TODO: count >= 0 check?
     return this.setOrDelete(index, count, false);
   }
@@ -214,17 +214,17 @@ export class SparseArray<T> {
     index: number,
     values: T[],
     isPresent: true
-  ): SparseArray<T>;
+  ): SparseArrayDirect<T>;
   private setOrDelete(
     index: number,
     deleteCount: number,
     isPresent: false
-  ): SparseArray<T>;
+  ): SparseArrayDirect<T>;
   private setOrDelete(
     index: number,
     item: T[] | number,
     isPresent: boolean
-  ): SparseArray<T> {
+  ): SparseArrayDirect<T> {
     const count = isPresent ? (item as T[]).length : (item as number);
 
     // Optimize common case: append.
@@ -232,7 +232,7 @@ export class SparseArray<T> {
       appendDeleted(this.state, index - this._length);
       appendItem(this.state, item, isPresent);
       this._length = index + count;
-      return SparseArray.empty(count);
+      return SparseArrayDirect.empty(count);
     }
 
     // Avoid past-end edge case.
@@ -243,7 +243,7 @@ export class SparseArray<T> {
 
     // Avoid trivial-item edge case.
     // Note that we still update this._length above.
-    if (count === 0) return SparseArray.empty();
+    if (count === 0) return SparseArrayDirect.empty();
 
     const [sI, sOffset] = this.locate(index);
     const [eI, eOffset] = this.locate(count, true, sI, sOffset);
@@ -257,7 +257,8 @@ export class SparseArray<T> {
     } else {
       // replacedItems = [start.slice(sOffset), ...this.state.slice(sI + 1, eI), end.slice(0, eOffset)]
       this.appendItemSlice(replacedItems, sI, sOffset);
-      // Alternation guaranteed - don't need to use appendItem().
+      // Guaranteed that previous item is not [] (since sOffset < start.length)
+      // and others alternate, so can just append.
       for (let i = sI + 1; i < eI; i++) replacedItems.push(this.state[i]);
       this.appendItemSlice(replacedItems, eI, 0, eOffset);
     }
@@ -268,29 +269,35 @@ export class SparseArray<T> {
     //     end.slice(eOffset) if non-empty
     // ]
     const newItems: (T[] | number)[] = [];
-    if (sOffset !== 0) {
-      this.appendItemSlice(newItems, sI, 0, sOffset);
-    }
+    this.appendItemSlice(newItems, sI, 0, sOffset);
     appendItem(newItems, item, isPresent);
-    const endLength =
-      eI % 2 === 0
-        ? (this.state[eI] as T[]).length
-        : (this.state[eI] as number);
-    if (eOffset !== endLength) {
-      this.appendItemSlice(newItems, eI, eOffset, endLength);
-    }
+    this.appendItemSlice(newItems, eI, eOffset);
 
-    // Append the trailing kept items (> eI) to newItems.
+    // Also append the trailing kept items (> eI).
+    // After the first (which is nontrivial b/c eI + 1 > 0),
+    // we can just append - already alternates.
     if (eI + 1 < this.state.length) {
       appendItem(newItems, this.state[eI + 1], eI % 2 === 1);
-      for (let i = eI + 2; i < this.state.length; i++) {
-        // Alternation guaranteed - don't need to use appendItem.
-        newItems.push(this.state[i]);
-      }
+    }
+    for (let i = eI + 2; i < this.state.length; i++) {
+      newItems.push(this.state[i]);
     }
 
-    this.state.splice(sI, Infinity, ...newItems);
-    return new SparseArray(replacedItems, count);
+    // Delete replaced & trailing items.
+    this.state.splice(sI);
+
+    // Append new and trailing items.
+    // After the second (which is nontrivial),
+    // we can just append - already alternates.
+    appendPresent(this.state, newItems[0] as T[]);
+    if (1 < newItems.length) {
+      appendDeleted(this.state, newItems[1] as number);
+    }
+    for (let j = 2; j < newItems.length; j++) {
+      this.state.push(newItems[j]);
+    }
+
+    return new SparseArrayDirect(replacedItems, count);
   }
 
   /**

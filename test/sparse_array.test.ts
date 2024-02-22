@@ -1,7 +1,6 @@
 import { assert } from "chai";
 import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
-// TODO: also test sparse_array_direct.ts
 import { SparseArray } from "../src";
 
 function getState<T>(arr: SparseArray<T>): (T[] | number)[] {
