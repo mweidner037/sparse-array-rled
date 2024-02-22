@@ -1,47 +1,6 @@
-function appendPresent<T>(state: (T[] | number)[], present: T[]): void {
-  // OPT: Enforce non-zero length, so we can skip this check.
-  if (present.length === 0) return;
-  if (state.length % 2 === 0) {
-    // Empty, or ends with deleted item.
-    state.push(present);
-  } else {
-    // Non-empty and ends with present item.
-    (state[state.length - 1] as T[]).push(...present);
-  }
-}
+import { SparseItems } from "./sparse_items";
 
-function appendDeleted<T>(state: (T[] | number)[], deleted: number): void {
-  if (deleted === 0) return;
-  if (state.length % 2 === 1) {
-    // Non-empty and ends with present item.
-    state.push(deleted);
-  } else if (state.length === 0) {
-    // Empty.
-    state.push([], deleted);
-  } else {
-    // Non-empty and ends with deleted item.
-    (state[state.length - 1] as number) += deleted;
-  }
-}
-
-function appendItem<T>(
-  state: (T[] | number)[],
-  item: T[] | number,
-  isPresent: boolean
-): void {
-  if (isPresent) appendPresent(state, item as T[]);
-  else appendDeleted(state, item as number);
-}
-
-export class SparseArray<T> {
-  protected readonly state: (T[] | number)[];
-  protected _length: number;
-
-  protected constructor(state: (T[] | number)[], length: number) {
-    this.state = state;
-    this._length = length;
-  }
-
+export class SparseArray<T> extends SparseItems<T[]> {
   static empty<T>(length = 0): SparseArray<T> {
     if (length === 0) return new this([], 0);
     else return new this([[], length], length);
@@ -117,25 +76,6 @@ export class SparseArray<T> {
     }
   }
 
-  get length(): number {
-    return this._length;
-  }
-
-  size(): number {
-    let size = 0;
-    for (let i = 0; i < this.state.length; i += 2) {
-      size += (this.state[i] as T[]).length;
-    }
-    return size;
-  }
-
-  isEmpty(): boolean {
-    return (
-      this.state.length === 0 ||
-      (this.state.length === 2 && (this.state[0] as T[]).length === 0)
-    );
-  }
-
   hasGet(index: number): [has: boolean, get: T | undefined] {
     if (index < 0) throw new Error(`Invalid index: ${index}`);
 
@@ -175,16 +115,6 @@ export class SparseArray<T> {
     }
   }
 
-  trim(): void {
-    if (this.state.length % 2 === 0 && this.state.length !== 0) {
-      const lastDeleted = this.state.pop() as number;
-      this._length -= lastDeleted;
-    }
-    if (this.state.length === 1 && (this.state[0] as T[]).length === 0) {
-      this.state.pop();
-    }
-  }
-
   /**
    *
    * @param index
@@ -208,131 +138,24 @@ export class SparseArray<T> {
     return this.setOrDelete(index, count, false);
   }
 
-  private setOrDelete(
-    index: number,
-    values: T[],
-    isPresent: true
-  ): SparseArray<T>;
-  private setOrDelete(
-    index: number,
-    deleteCount: number,
-    isPresent: false
-  ): SparseArray<T>;
-  private setOrDelete(
-    index: number,
-    item: T[] | number,
-    isPresent: boolean
-  ): SparseArray<T> {
-    const count = isPresent ? (item as T[]).length : (item as number);
-
-    // Optimize common case: append.
-    if (index >= this._length) {
-      appendDeleted(this.state, index - this._length);
-      appendItem(this.state, item, isPresent);
-      this._length = index + count;
-      return SparseArray.empty(count);
-    }
-
-    // Avoid past-end edge case.
-    if (this._length < index + count) {
-      appendDeleted(this.state, index + count - this._length);
-      this._length = index + count;
-    }
-
-    // Avoid trivial-item edge case.
-    // Note that we still update this._length above.
-    if (count === 0) return SparseArray.empty();
-
-    const [sI, sOffset] = this.locate(index);
-    const [eI, eOffset] = this.locate(count, true, sI, sOffset);
-
-    // Items in the range [sI, eI] are replaced (not kept in their entirety).
-    // sI and eI may be partially kept; if so, we add the kept slices to newItems.
-    const replacedItems: (T[] | number)[] = [];
-    if (sI === eI) {
-      // replacedItems = [start.slice(sOffset, eOffset)]
-      this.appendItemSlice(replacedItems, sI, sOffset, eOffset);
-    } else {
-      // replacedItems = [start.slice(sOffset), ...this.state.slice(sI + 1, eI), end.slice(0, eOffset)]
-      this.appendItemSlice(replacedItems, sI, sOffset);
-      // Alternation guaranteed - don't need to use appendItem().
-      for (let i = sI + 1; i < eI; i++) replacedItems.push(this.state[i]);
-      this.appendItemSlice(replacedItems, eI, 0, eOffset);
-    }
-
-    // newItems = [
-    //     start.slice(0, sOffset) if non-empty,
-    //     item,
-    //     end.slice(eOffset) if non-empty
-    // ]
-    const newItems: (T[] | number)[] = [];
-    if (sOffset !== 0) {
-      this.appendItemSlice(newItems, sI, 0, sOffset);
-    }
-    appendItem(newItems, item, isPresent);
-    const endLength =
-      eI % 2 === 0
-        ? (this.state[eI] as T[]).length
-        : (this.state[eI] as number);
-    if (eOffset !== endLength) {
-      this.appendItemSlice(newItems, eI, eOffset, endLength);
-    }
-
-    // Append the trailing kept items (> eI) to newItems.
-    if (eI + 1 < this.state.length) {
-      appendItem(newItems, this.state[eI + 1], eI % 2 === 1);
-      for (let i = eI + 2; i < this.state.length; i++) {
-        // Alternation guaranteed - don't need to use appendItem.
-        newItems.push(this.state[i]);
-      }
-    }
-
-    this.state.splice(sI, Infinity, ...newItems);
-    return new SparseArray(replacedItems, count);
+  protected construct(state: (number | T[])[], length: number): this {
+    return new SparseArray(state, length) as this;
   }
 
-  /**
-   * Returns [i, offset] s.t. this.state[i][offset] (or deleted equivalent)
-   * corresponds to index = indexDiff + (index at input [i, offset]).
-   *
-   * @param includeEnds If true and the index is at the start of an item,
-   * returns [previous item index, previous item length] instead of
-   * [item, 0].
-   * @throws If index > this._length, or index == this._length and !includeEnds.
-   */
-  private locate(
-    indexDiff: number,
-    includeEnds = false,
-    i = 0,
-    offset = 0
-  ): [i: number, offset: number] {
-    // Reset remaining to the start of index i.
-    let remaining = indexDiff + offset;
-
-    for (; i < this.state.length; i++) {
-      const itemLength =
-        i % 2 === 0 ? (this.state[i] as T[]).length : (this.state[i] as number);
-      if (remaining < itemLength || (includeEnds && remaining === itemLength)) {
-        return [i, remaining];
-      }
-      remaining -= itemLength;
-    }
-
-    throw new Error("Internal error: past end");
+  protected itemNewEmpty(): T[] {
+    return [];
   }
 
-  /**
-   * Appends this.state[index].slice(start, end) to items, preserving items's
-   * SparseArray format.
-   */
-  private appendItemSlice(
-    items: (T[] | number)[],
-    index: number,
-    start: number,
-    end?: number
-  ): void {
-    if (index % 2 === 0) {
-      appendPresent(items, (this.state[index] as T[]).slice(start, end));
-    } else appendDeleted(items, (end ?? (this.state[index] as number)) - start);
+  protected itemLength(item: T[]): number {
+    return item.length;
+  }
+
+  protected itemMerge(a: T[], b: T[]): T[] {
+    a.push(...b);
+    return a;
+  }
+
+  protected itemSlice(item: T[], start: number, end?: number | undefined): T[] {
+    return item.slice(start, end);
   }
 }
