@@ -1,32 +1,32 @@
 import { SparseItems } from "./sparse_items";
 
-export class SparseArray<T> extends SparseItems<T[]> {
-  static empty<T>(length = 0): SparseArray<T> {
+export class SparseText extends SparseItems<string> {
+  static empty(length = 0): SparseText {
     if (length === 0) return new this([], 0);
-    else return new this([[], length], length);
+    else return new this(["", length], length);
   }
 
-  static fromUnsafe<T>(state: (T[] | number)[]): SparseArray<T> {
+  static fromUnsafe(state: (string | number)[]): SparseText {
     let length = 0;
     for (let i = 0; i < state.length; i++) {
-      if (i % 2 === 0) length += (state[i] as T[]).length;
+      if (i % 2 === 0) length += (state[i] as string).length;
       else length += state[i] as number;
     }
     return new this(state, length);
   }
 
-  static from<T>(state: (T[] | number)[]): SparseArray<T> {
+  static from(state: (string | number)[]): SparseText {
     // Defensive deep copy.
     // TODO: also correctness checks?
-    const copy = new Array<T[] | number>(state.length);
+    const copy = new Array<string | number>(state.length);
     for (let i = 0; i < state.length; i++) {
-      if (i % 2 === 0) copy[i] = (state[i] as T[]).slice();
+      if (i % 2 === 0) copy[i] = (state[i] as string).slice();
       else copy[i] = state[i] as number;
     }
     return this.fromUnsafe(copy);
   }
 
-  // TODO: clone? / from(SparseArray)? Can reuse length.
+  // TODO: clone? / from(SparseText)? Can reuse length.
 
   /**
    *
@@ -34,22 +34,20 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * @param length If specified, will be padded to the given length, which
    * must exceed the last present index.
    */
-  static fromEntries<T>(
-    entries: Iterable<[index: number, value: T]>,
+  static fromEntries(
+    entries: Iterable<[index: number, char: string]>,
     length?: number
-  ): SparseArray<T> {
-    // The current last item in state, which is always present.
-    let curPresent: T[] = [];
-    const state: (T[] | number)[] = [curPresent];
+  ): SparseText {
+    // Last item is always present.
+    const state: (string | number)[] = [""];
     // The current length of state.
     let curLength = 0;
 
-    for (const [index, value] of entries) {
+    for (const [index, char] of entries) {
       if (index === curLength) {
-        curPresent.push(value);
+        (state[state.length - 1] as string) += char;
       } else if (index > curLength) {
-        curPresent = [value];
-        state.push(index - curLength, curPresent);
+        state.push(index - curLength, char);
       } else {
         throw new Error(
           `Out-of-order index in entries: ${index}, previous was ${
@@ -70,18 +68,18 @@ export class SparseArray<T> extends SparseItems<T[]> {
       return new this(state, length);
     } else {
       if (curLength === 0) {
-        // Completely empty; use [] instead of state = [[]].
+        // Completely empty; use [] instead of state = [""].
         return new this([], 0);
       } else return new this(state, curLength);
     }
   }
 
-  hasGet(index: number): [has: boolean, get: T | undefined] {
+  hasGet(index: number): [has: boolean, get: string | undefined] {
     if (index < 0) throw new Error(`Invalid index: ${index}`);
 
     const [i, offset] = this.locate(index);
     if (i % 2 === 0) {
-      return [true, (this.state[i] as T[])[offset]];
+      return [true, (this.state[i] as string)[offset]];
     } else return [false, undefined];
   }
 
@@ -89,15 +87,15 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return this.hasGet(index)[0];
   }
 
-  get(index: number): T | undefined {
+  get(index: number): string | undefined {
     return this.hasGet(index)[1];
   }
 
-  *entries(): IterableIterator<[index: number, value: T]> {
+  *entries(): IterableIterator<[index: number, char: string]> {
     let index = 0;
     for (let i = 0; i < this.state.length; i++) {
       if (i % 2 === 0) {
-        const present = this.state[i] as T[];
+        const present = this.state[i] as string;
         for (const value of present) {
           yield [index, value];
           index++;
@@ -106,8 +104,6 @@ export class SparseArray<T> extends SparseItems<T[]> {
     }
   }
 
-  // TODO: toString? Also on others. Could just print state.
-
   /**
    *
    * @param index
@@ -115,8 +111,8 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * @returns The replaced values, as a sparse array whose index 0 corresponds
    * to our index, and whose length is values.length (untrimmed).
    */
-  set(index: number, ...values: T[]): SparseArray<T> {
-    return this.setOrDelete(index, values, true);
+  set(index: number, chars: string): SparseText {
+    return this.setOrDelete(index, chars, true);
   }
 
   /**
@@ -126,39 +122,40 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * @returns The replaced values, as a sparse array whose index 0 corresponds
    * to our index, and whose length is count (untrimmed).
    */
-  delete(index: number, count = 1): SparseArray<T> {
+  delete(index: number, count = 1): SparseText {
     // TODO: count >= 0 check?
     return this.setOrDelete(index, count, false);
   }
 
-  protected construct(state: (number | T[])[], length: number): this {
-    return new SparseArray(state, length) as this;
+  protected construct(state: (number | string)[], length: number): this {
+    return new SparseText(state, length) as this;
   }
 
-  protected itemNewEmpty(): T[] {
-    return [];
+  protected itemNewEmpty(): string {
+    return "";
   }
 
-  protected itemLength(item: T[]): number {
+  protected itemLength(item: string): number {
     return item.length;
   }
 
-  protected itemMerge(a: T[], b: T[]): T[] {
-    a.push(...b);
-    return a;
+  protected itemMerge(a: string, b: string): string {
+    return a + b;
   }
 
-  protected itemSlice(item: T[], start: number, end?: number | undefined): T[] {
+  protected itemSlice(
+    item: string,
+    start: number,
+    end?: number | undefined
+  ): string {
     return item.slice(start, end);
   }
 
-  protected itemUpdate(item: T[], start: number, replace: T[]): T[] {
-    for (let i = 0; i < replace.length; i++) item[start + i] = replace[i];
-    return item;
+  protected itemUpdate(item: string, start: number, replace: string): string {
+    return item.slice(0, start) + replace + item.slice(start + replace.length);
   }
 
-  protected itemShorten(item: T[], newLength: number): T[] {
-    item.length = newLength;
-    return item;
+  protected itemShorten(item: string, newLength: number): string {
+    return item.slice(0, newLength);
   }
 }

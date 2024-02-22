@@ -65,7 +65,7 @@ const martinTraceEdits = martinTraceEditsRaw as unknown as Array<
 export function martinTrace(arrType: SparseArrayType): void {
   const list = new Map<string, ISparseArray<string>>();
   for (const edit of martinTraceEdits) {
-    if (edit.type === "set" ) {
+    if (edit.type === "set") {
       let arr = list.get(edit.bunchID);
       if (arr === undefined) {
         arr = arrType.construct<string>();
