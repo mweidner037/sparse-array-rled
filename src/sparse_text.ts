@@ -18,12 +18,7 @@ export class SparseText extends SparseItems<string> {
   static from(state: (string | number)[]): SparseText {
     // Defensive deep copy.
     // TODO: also correctness checks?
-    const copy = new Array<string | number>(state.length);
-    for (let i = 0; i < state.length; i++) {
-      if (i % 2 === 0) copy[i] = (state[i] as string).slice();
-      else copy[i] = state[i] as number;
-    }
-    return this.fromUnsafe(copy);
+    return this.fromUnsafe(state.slice());
   }
 
   // TODO: clone? / from(SparseText)? Can reuse length.

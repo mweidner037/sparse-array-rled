@@ -1,6 +1,4 @@
 import { SparseArray } from "../src";
-import { SparseArrayDirect } from "../src/sparse_array_direct";
-import { ListPositionsSparseArray } from "./list_positions";
 import {
   append,
   backspace,
@@ -9,19 +7,28 @@ import {
   randomDeletes,
 } from "./traces";
 import { BenchmarkTrace, SparseArrayType, timeOne } from "./util";
+import { SparseIndexesWrapper, SparseTextWrapper } from "./wrappers";
 
 const arrTypes: SparseArrayType[] = [
   {
     name: "RLE-templated",
     construct: <T>() => SparseArray.empty<T>(),
   },
+  // {
+  //   name: "RLE-direct",
+  //   construct: <T>() => SparseArrayDirect.empty<T>(),
+  // },
+  // {
+  //   name: "list-positions",
+  //   construct: <T>() => new ListPositionsSparseArray<T>(),
+  // },
   {
-    name: "RLE-direct",
-    construct: <T>() => SparseArrayDirect.empty<T>(),
+    name: "SparseText",
+    construct: <T>() => new SparseTextWrapper<T>(),
   },
   {
-    name: "list-positions",
-    construct: <T>() => new ListPositionsSparseArray<T>(),
+    name: "SparseIndexes",
+    construct: <T>() => new SparseIndexesWrapper<T>(),
   },
 ];
 

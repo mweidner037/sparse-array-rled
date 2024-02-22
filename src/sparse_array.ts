@@ -18,10 +18,10 @@ export class SparseArray<T> extends SparseItems<T[]> {
   static from<T>(state: (T[] | number)[]): SparseArray<T> {
     // Defensive deep copy.
     // TODO: also correctness checks?
-    const copy = new Array<T[] | number>(state.length);
+    const copy: (T[] | number)[] = [];
     for (let i = 0; i < state.length; i++) {
-      if (i % 2 === 0) copy[i] = (state[i] as T[]).slice();
-      else copy[i] = state[i] as number;
+      if (i % 2 === 0) copy.push((state[i] as T[]).slice());
+      else copy.push(state[i] as number);
     }
     return this.fromUnsafe(copy);
   }
