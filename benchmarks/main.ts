@@ -1,4 +1,5 @@
 import { SparseArray } from "../src";
+import { ListPositionsSparseArray } from "./list_positions";
 import {
   append,
   backspace,
@@ -12,6 +13,10 @@ const arrTypes: SparseArrayType[] = [
   {
     name: "RLE-templated",
     construct: <T>() => SparseArray.empty<T>(),
+  },
+  {
+    name: "list-positions",
+    construct: <T>() => new ListPositionsSparseArray<T>(),
   },
 ];
 
@@ -28,5 +33,6 @@ void (async function () {
     for (const arrType of arrTypes) {
       await timeOne(trace, arrType);
     }
+    console.log();
   }
 })();

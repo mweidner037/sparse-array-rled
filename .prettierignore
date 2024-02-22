@@ -4,3 +4,4 @@
 /coverage/*
 LICENSE
 benchmarks/martin_trace.json
+benchmark_results.md
