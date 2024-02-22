@@ -106,7 +106,7 @@ export abstract class SparseItems<I> {
     } else {
       // replacedItems = [start.slice(sOffset), ...this.state.slice(sI + 1, eI), end.slice(0, eOffset)]
       this.appendItemSlice(replacedItems, sI, sOffset);
-      // Alternation guaranteed - don't need to use appendItem().
+      // Guaranteed alternating & non-empty - don't need to use appendItem(). TODO: what if first slice is []?
       for (let i = sI + 1; i < eI; i++) replacedItems.push(this.state[i]);
       this.appendItemSlice(replacedItems, eI, 0, eOffset);
     }
@@ -129,16 +129,22 @@ export abstract class SparseItems<I> {
       this.appendItemSlice(newItems, eI, eOffset, endLength);
     }
 
-    // Append the trailing kept items (> eI) to newItems.
-    if (eI + 1 < this.state.length) {
-      this.appendItem(newItems, this.state[eI + 1], eI % 2 === 1);
-      for (let i = eI + 2; i < this.state.length; i++) {
-        // Alternation guaranteed - don't need to use appendItem.
-        newItems.push(this.state[i]);
+    // Also store the trailing kept items (> eI) for appending.
+    const trailingItems = this.state.slice(eI + 1);
+
+    // Delete replaced & trailing items, then append new & trailing items.
+    this.state.splice(sI);
+    for (let j = 0; j < newItems.length; j++) {
+      this.appendItem(this.state, newItems[j], j % 2 === 0);
+    }
+    if (trailingItems.length > 0) {
+      this.appendItem(this.state, trailingItems[0], eI % 2 === 1);
+      // Guaranteed that first item is nontrivial and others alternate? TODO: what if first is []?
+      for (let j = 1; j < trailingItems.length; j++) {
+        this.state.push(trailingItems[j]);
       }
     }
 
-    this.state.splice(sI, Infinity, ...newItems);
     return this.construct(replacedItems, count);
   }
 
