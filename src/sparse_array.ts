@@ -79,19 +79,10 @@ export class SparseArray<T> extends SparseItems<T[]> {
   hasGet(index: number): [has: boolean, get: T | undefined] {
     if (index < 0) throw new Error(`Invalid index: ${index}`);
 
-    let remaining = index;
-    for (let i = 0; i < this.state.length; i++) {
-      if (i % 2 === 0) {
-        const present = this.state[i] as T[];
-        if (remaining < present.length) return [true, present[remaining]];
-        remaining -= present.length;
-      } else {
-        const deleted = this.state[i] as number;
-        if (remaining < deleted) return [false, undefined];
-        remaining -= deleted;
-      }
-    }
-    return [false, undefined];
+    const [i, offset] = this.locate(index);
+    if (i % 2 === 0) {
+      return [true, (this.state[i] as T[])[offset]];
+    } else return [false, undefined];
   }
 
   has(index: number): boolean {

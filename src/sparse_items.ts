@@ -106,7 +106,8 @@ export abstract class SparseItems<I> {
     } else {
       // replacedItems = [start.slice(sOffset), ...this.state.slice(sI + 1, eI), end.slice(0, eOffset)]
       this.appendItemSlice(replacedItems, sI, sOffset);
-      // Guaranteed alternating & non-empty - don't need to use appendItem(). TODO: what if first slice is []?
+      // Guaranteed that previous item is not [] (since sOffset < start.length)
+      // and others alternate, so can just append.
       for (let i = sI + 1; i < eI; i++) replacedItems.push(this.state[i]);
       this.appendItemSlice(replacedItems, eI, 0, eOffset);
     }
@@ -117,32 +118,32 @@ export abstract class SparseItems<I> {
     //     end.slice(eOffset) if non-empty
     // ]
     const newItems: (I | number)[] = [];
-    if (sOffset !== 0) {
-      this.appendItemSlice(newItems, sI, 0, sOffset);
-    }
+    this.appendItemSlice(newItems, sI, 0, sOffset);
     this.appendItem(newItems, item, isPresent);
-    const endLength =
-      eI % 2 === 0
-        ? this.itemLength(this.state[eI] as I)
-        : (this.state[eI] as number);
-    if (eOffset !== endLength) {
-      this.appendItemSlice(newItems, eI, eOffset, endLength);
+    this.appendItemSlice(newItems, eI, eOffset);
+
+    // Also append the trailing kept items (> eI).
+    // After the first (which is nontrivial b/c eI + 1 > 0),
+    // we can just append - already alternates.
+    if (eI + 1 < this.state.length) {
+      this.appendItem(newItems, this.state[eI + 1], eI % 2 === 1);
+    }
+    for (let i = eI + 2; i < this.state.length; i++) {
+      newItems.push(this.state[i]);
     }
 
-    // Also store the trailing kept items (> eI) for appending.
-    const trailingItems = this.state.slice(eI + 1);
-
-    // Delete replaced & trailing items, then append new & trailing items.
+    // Delete replaced & trailing items.
     this.state.splice(sI);
-    for (let j = 0; j < newItems.length; j++) {
-      this.appendItem(this.state, newItems[j], j % 2 === 0);
+
+    // Append new and trailing items.
+    // After the second (which is nontrivial),
+    // we can just append - already alternates.
+    this.appendPresent(this.state, newItems[0] as I);
+    if (1 < newItems.length) {
+      this.appendDeleted(this.state, newItems[1] as number);
     }
-    if (trailingItems.length > 0) {
-      this.appendItem(this.state, trailingItems[0], eI % 2 === 1);
-      // Guaranteed that first item is nontrivial and others alternate? TODO: what if first is []?
-      for (let j = 1; j < trailingItems.length; j++) {
-        this.state.push(trailingItems[j]);
-      }
+    for (let j = 2; j < newItems.length; j++) {
+      this.state.push(newItems[j]);
     }
 
     return this.construct(replacedItems, count);
@@ -152,12 +153,14 @@ export abstract class SparseItems<I> {
    * Returns [i, offset] s.t. this.state[i][offset] (or deleted equivalent)
    * corresponds to index = indexDiff + (index at input [i, offset]).
    *
+   * If out of bounds, returns [-1, this.length - index].
+   * (When includeEnds is true, index = this.length is in-bounds.)
+   *
    * @param includeEnds If true and the index is at the start of an item,
    * returns [previous item index, previous item length] instead of
    * [item, 0].
-   * @throws If index > this._length, or index == this._length and !includeEnds.
    */
-  private locate(
+  protected locate(
     indexDiff: number,
     includeEnds = false,
     i = 0,
@@ -177,8 +180,16 @@ export abstract class SparseItems<I> {
       remaining -= itemLength;
     }
 
-    // TODO: remove; use locate for getters?
-    throw new Error("Internal error: past end");
+    return [-1, remaining];
+  }
+
+  private appendItem(
+    arr: (I | number)[],
+    item: I | number,
+    isPresent: boolean
+  ): void {
+    if (isPresent) this.appendPresent(arr, item as I);
+    else this.appendDeleted(arr, item as number);
   }
 
   /**
@@ -198,15 +209,6 @@ export abstract class SparseItems<I> {
       );
     } else
       this.appendDeleted(items, (end ?? (this.state[index] as number)) - start);
-  }
-
-  private appendItem(
-    arr: (I | number)[],
-    item: I | number,
-    isPresent: boolean
-  ): void {
-    if (isPresent) this.appendPresent(arr, item as I);
-    else this.appendDeleted(arr, item as number);
   }
 
   private appendPresent(arr: (I | number)[], present: I): void {
