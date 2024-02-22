@@ -149,4 +149,18 @@ export class SparseArray<T> extends SparseItems<T[]> {
   protected itemSlice(item: T[], start: number, end?: number | undefined): T[] {
     return item.slice(start, end);
   }
+
+  protected itemUpdate(
+    item: T[],
+    start: number,
+    replace: T[]
+  ): [item: T[], replaced: T[]] {
+    const replaced = item.splice(start, replace.length, ...replace);
+    return [item, replaced];
+  }
+
+  protected itemShorten(item: T[], newLength: number): T[] {
+    item.length = newLength;
+    return item;
+  }
 }

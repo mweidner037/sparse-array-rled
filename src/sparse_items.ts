@@ -34,6 +34,22 @@ export abstract class SparseItems<I> {
    */
   protected abstract itemSlice(item: I, start: number, end?: number): I;
 
+  /**
+   * Replace [index, index + replace.length) with replace's values.
+   *
+   * Preferably modify item in-place and return it.
+   */
+  protected abstract itemUpdate(
+    item: I,
+    index: number,
+    replace: I
+  ): [item: I, replaced: I];
+
+  /**
+   * Preferably modify item in-place and return it.
+   */
+  protected abstract itemShorten(item: I, newLength: number): I;
+
   get length(): number {
     return this._length;
   }
@@ -96,6 +112,38 @@ export abstract class SparseItems<I> {
 
     const [sI, sOffset] = this.locate(index);
     const [eI, eOffset] = this.locate(count, true, sI, sOffset);
+
+    if (sI === eI) {
+      // Optimize some easy cases that only touch one item (start).
+      if (isPresent === (sI % 2 === 0)) {
+        // No type changes, just replacing values within start.
+        if (isPresent) {
+          let replacedValues: I;
+          [this.state[sI], replacedValues] = this.itemUpdate(
+            this.state[sI] as I,
+            sOffset,
+            item as I
+          );
+          return this.construct([replacedValues], count);
+        } else return this.constructEmpty(count);
+      } else if (!isPresent && sOffset > 0) {
+        // Deleting values at the middle/end of start.
+        const start = this.state[sI] as I;
+        const replacedValues = this.itemSlice(start, sOffset, eOffset);
+        if (eOffset < this.itemLength(start)) {
+          const trailingValues = this.itemSlice(start, eOffset);
+          this.state[sI] = this.itemShorten(start, sOffset);
+          this.state.splice(sI + 1, 0, count, trailingValues);
+        } else {
+          this.state[sI] = this.itemShorten(start, sOffset);
+          if (sI + 1 < this.state.length) {
+            (this.state[sI + 1] as number) += count;
+          } else this.state.push(count);
+        }
+        return this.construct([replacedValues], count);
+      }
+      // Else fall through to default case.
+    }
 
     // Items in the range [sI, eI] are replaced (not kept in their entirety).
     // sI and eI may be partially kept; if so, we add the kept slices to newItems.
