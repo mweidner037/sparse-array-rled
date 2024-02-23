@@ -38,6 +38,30 @@ const arrTypesArray: SparseArrayType[] = [
       return (arr as SparseIndexes).delete(index, count);
     },
   },
+  {
+    name: "PlainArray",
+    construct() {
+      return [];
+    },
+    set(arr: object, index: number, ...values: unknown[]) {
+      const arr2 = arr as unknown[];
+      const replaced = arr2.slice(index, index + values.length);
+      replaced.length = values.length;
+      for (let i = 0; i < values.length; i++) {
+        arr2[index + i] = values[i];
+      }
+      return replaced;
+    },
+    delete(arr: object, index: number, count = 1) {
+      const arr2 = arr as unknown[];
+      const replaced = arr2.slice(index, index + count);
+      replaced.length = count;
+      for (let i = 0; i < count; i++) {
+        delete arr2[index + i];
+      }
+      return replaced;
+    },
+  },
 ];
 
 export const arrTypes = Object.fromEntries(
