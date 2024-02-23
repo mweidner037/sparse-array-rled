@@ -69,7 +69,7 @@
     "fix": "npm-run-all fix:*",
     "fix:format": "prettier --write .",
     "docs": "typedoc --options typedoc.json src/index.ts",
-    "benchmarks": "cross-env TS_NODE_PROJECT='./tsconfig.dev.json' node -r ts-node/register --expose-gc --enable-source-maps benchmarks/main.ts",
+    "benchmarks": "cross-env TS_NODE_PROJECT='./tsconfig.dev.json' node -r ts-node/register --expose-gc --inspect --enable-source-maps benchmarks/main.ts",
     "clean": "rm -rf build docs coverage .nyc_output"
   }
 }

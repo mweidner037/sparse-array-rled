@@ -1,5 +1,5 @@
+import fs from "fs";
 import seedrandom from "seedrandom";
-import martinTraceEditsRaw from "./martin_trace.json";
 import { ISparseArray, SparseArrayType } from "./util";
 
 // Each basic trace performs 1,000,000 set/delete ops.
@@ -52,7 +52,9 @@ export function frontAndBack(arrType: SparseArrayType): void {
   }
 }
 
-const martinTraceEdits = martinTraceEditsRaw as unknown as Array<
+const martinTraceEdits = JSON.parse(
+  fs.readFileSync("./benchmarks/martin_trace.json").toString()
+) as Array<
   | {
       type: "set";
       bunchID: string;
@@ -62,19 +64,33 @@ const martinTraceEdits = martinTraceEditsRaw as unknown as Array<
   | { type: "delete"; bunchID: string; index: number }
 >;
 
-export function martinTrace(arrType: SparseArrayType): void {
-  const list = new Map<string, ISparseArray<string>>();
+/**
+ * Wrapper for martinTrace data, so it's easier to find in the heap profiler.
+ */
+class TRACE_LIST {
+  constructor(readonly bunches = new Map<string, ISparseArray<string>>()) {}
+}
+const profile = false;
+
+export async function martinTrace(arrType: SparseArrayType) {
+  const list = new TRACE_LIST();
   for (const edit of martinTraceEdits) {
     if (edit.type === "set") {
-      let arr = list.get(edit.bunchID);
+      let arr = list.bunches.get(edit.bunchID);
       if (arr === undefined) {
         arr = arrType.construct<string>();
-        list.set(edit.bunchID, arr);
+        list.bunches.set(edit.bunchID, arr);
       }
       arr.set(edit.index, edit.value);
     } else {
-      const arr = list.get(edit.bunchID)!;
+      const arr = list.bunches.get(edit.bunchID)!;
       arr.delete(edit.index);
     }
+  }
+  if (profile) {
+    console.log("Ready to profile");
+    await new Promise((resolve) => setTimeout(resolve, 100000000));
+    // Keep list in scope.
+    console.log(list);
   }
 }

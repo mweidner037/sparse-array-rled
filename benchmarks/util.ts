@@ -14,7 +14,7 @@ export interface SparseArrayType {
 export type BenchmarkTrace = (
   arrType: SparseArrayType,
   prng: seedrandom.PRNG
-) => void;
+) => void | Promise<void>;
 
 export async function timeOne(trace: BenchmarkTrace, arrType: SparseArrayType) {
   const timesMS: number[] = [];
@@ -23,7 +23,7 @@ export async function timeOne(trace: BenchmarkTrace, arrType: SparseArrayType) {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     const startTime = process.hrtime.bigint();
-    trace(arrType, prng);
+    await trace(arrType, prng);
     const timeMS =
       new Number(process.hrtime.bigint() - startTime).valueOf() / 1000000;
     if (i >= 0) timesMS.push(timeMS);
