@@ -2,37 +2,31 @@ import { assert } from "chai";
 import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
 import { SparseArray } from "../src";
+import { Pair } from "../src/sparse_items";
 
-function getState<T>(arr: SparseArray<T>): (T[] | number)[] {
+function getState<T>(arr: SparseArray<T>): Pair<string[]>[] {
   // @ts-expect-error Ignore protected
   return arr.state;
 }
 
-function validate(items: (string[] | number)[], trimmed = false): void {
-  // Alternation rule.
-  for (let i = 0; i < items.length; i++) {
-    if (i % 2 === 0) assert.isArray(items[i]);
-    else assert.typeOf(items[i], "number");
-  }
-
-  // No empty items except the first.
-  for (let i = 1; i < items.length; i++) {
-    if (i % 2 === 0) assert.isNotEmpty(items[i]);
-    else assert.notStrictEqual(items[i], 0, JSON.stringify(items));
+function validate(items: Pair<string[]>[], trimmed = false): void {
+  // No empty items except the first & last.
+  for (let i = 1; i < 2 * items.length - 1; i++) {
+    if (i % 2 === 0) assert.isNotEmpty(items[i >> 1].present);
+    else assert.notStrictEqual(items[i >> 1].deleted, 0, JSON.stringify(items));
   }
 
   if (trimmed && items.length !== 0) {
     // Check trimmed.
-    assert(items.length % 2 === 1, "Ends in deleted item");
-    if (items.length === 1) assert.isNotEmpty(items[0]);
+    assert(items[items.length - 1].deleted === 0, "Ends in deleted item");
+    if (items.length === 1) assert.isNotEmpty(items[0].present);
   }
 }
 
-function getLength(items: (string[] | number)[]): number {
+function getLength(items: Pair<string[]>[]): number {
   let ans = 0;
-  for (let i = 0; i < items.length; i++) {
-    if (i % 2 === 0) ans += (items[i] as string[]).length;
-    else ans += items[i] as number;
+  for (let j = 0; j < items.length; j++) {
+    ans += items[j].present.length + items[j].deleted;
   }
   return ans;
 }

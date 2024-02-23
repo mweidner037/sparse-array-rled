@@ -1,4 +1,9 @@
 import { SparseArray, SparseIndexes, SparseText } from "../src";
+import {
+  SparseArray as SparseArrayOld,
+  SparseIndexes as SparseIndexesOld,
+  SparseText as SparseTextOld,
+} from "../src/old";
 import { SparseArrayType } from "./util";
 
 const arrTypesArray: SparseArrayType[] = [
@@ -15,6 +20,18 @@ const arrTypesArray: SparseArrayType[] = [
     },
   },
   {
+    name: "SparseArrayOld",
+    construct() {
+      return SparseArrayOld.empty<unknown>();
+    },
+    set(arr: object, index: number, ...values: unknown[]) {
+      return (arr as SparseArrayOld<unknown>).set(index, ...values);
+    },
+    delete(arr: object, index: number, count?: number) {
+      return (arr as SparseArrayOld<unknown>).delete(index, count);
+    },
+  },
+  {
     name: "SparseText",
     construct() {
       return SparseText.empty();
@@ -27,6 +44,18 @@ const arrTypesArray: SparseArrayType[] = [
     },
   },
   {
+    name: "SparseTextOld",
+    construct() {
+      return SparseTextOld.empty();
+    },
+    set(arr: object, index: number, ...values: unknown[]) {
+      return (arr as SparseTextOld).set(index, values.join(""));
+    },
+    delete(arr: object, index: number, count?: number) {
+      return (arr as SparseTextOld).delete(index, count);
+    },
+  },
+  {
     name: "SparseIndexes",
     construct() {
       return SparseIndexes.empty();
@@ -36,6 +65,18 @@ const arrTypesArray: SparseArrayType[] = [
     },
     delete(arr: object, index: number, count?: number) {
       return (arr as SparseIndexes).delete(index, count);
+    },
+  },
+  {
+    name: "SparseIndexesOld",
+    construct() {
+      return SparseIndexesOld.empty();
+    },
+    set(arr: object, index: number, ...values: unknown[]) {
+      return (arr as SparseIndexesOld).set(index, values.length);
+    },
+    delete(arr: object, index: number, count?: number) {
+      return (arr as SparseIndexesOld).delete(index, count);
     },
   },
   {

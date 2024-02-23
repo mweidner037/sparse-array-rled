@@ -1,32 +1,23 @@
-export type Pair<I> = {
-  present: I;
-  deleted: number;
-};
-
 export abstract class SparseItems<I> {
   /**
    * Subclasses: don't mutate.
    */
-  protected readonly state: Pair<I>[];
+  protected readonly state: (I | number)[];
   /**
    * Subclasses: don't mutate.
    */
   protected _length: number;
 
-  protected constructor(state: Pair<I>[], length: number) {
+  protected constructor(state: (I | number)[], length: number) {
     this.state = state;
     this._length = length;
   }
 
-  protected abstract construct(state: Pair<I>[], length: number): this;
+  protected abstract construct(state: (I | number)[], length: number): this;
 
   protected constructEmpty(length = 0): this {
     if (length === 0) return this.construct([], 0);
-    else
-      return this.construct(
-        [{ present: this.itemNewEmpty(), deleted: length }],
-        length
-      );
+    else return this.construct([this.itemNewEmpty(), length], length);
   }
 
   protected abstract itemNewEmpty(): I;
@@ -61,8 +52,8 @@ export abstract class SparseItems<I> {
 
   size(): number {
     let size = 0;
-    for (let j = 0; j < this.state.length; j++) {
-      size += this.itemLength(this.state[j].present);
+    for (let i = 0; i < this.state.length; i += 2) {
+      size += this.itemLength(this.state[i] as I);
     }
     return size;
   }
@@ -70,16 +61,17 @@ export abstract class SparseItems<I> {
   isEmpty(): boolean {
     return (
       this.state.length === 0 ||
-      (this.state.length === 1 && this.itemLength(this.state[0].present) === 0)
+      (this.state.length === 2 && this.itemLength(this.state[0] as I) === 0)
     );
   }
 
   trim(): void {
-    if (this.state.length !== 0) {
-      const last = this.state[this.state.length - 1];
-      this._length -= last.deleted;
-      last.deleted = 0;
-      if (this._length === 0) this.state.pop();
+    if (this.state.length % 2 === 0 && this.state.length !== 0) {
+      const lastDeleted = this.state.pop() as number;
+      this._length -= lastDeleted;
+    }
+    if (this.state.length === 1 && this.itemLength(this.state[0] as I) === 0) {
+      this.state.pop();
     }
   }
 
@@ -120,37 +112,24 @@ export abstract class SparseItems<I> {
     if (sI === eI) {
       // Optimize some easy cases that only touch one item (start).
       if (sI % 2 === 0) {
-        const start = this.state[sI >> 1].present;
+        const start = this.state[sI] as I;
         if (isPresent) {
           // Just replacing values within start.
           const replacedValues = this.itemSlice(start, sOffset, eOffset);
-          this.state[sI >> 1].present = this.itemUpdate(
-            start,
-            sOffset,
-            item as I
-          );
-          return this.construct(
-            [{ present: replacedValues, deleted: 0 }],
-            count
-          );
+          this.state[sI] = this.itemUpdate(start, sOffset, item as I);
+          return this.construct([replacedValues], count);
         } else if (sOffset > 0) {
           // Deleting values at the middle/end of start.
           const replacedValues = this.itemSlice(start, sOffset, eOffset);
           if (eOffset < this.itemLength(start)) {
-            const trailing: Pair<I> = {
-              present: this.itemSlice(start, eOffset),
-              deleted: this.state[sI >> 1].deleted,
-            };
-            this.state[sI >> 1].deleted = count;
-            this.state.splice((sI >> 1) + 1, 0, trailing);
+            const trailingValues = this.itemSlice(start, eOffset);
+            this.state.splice(sI + 1, 0, count, trailingValues);
           } else {
-            this.state[sI >> 1].deleted += count;
+            if (sI + 1 === this.state.length) this.state.push(count);
+            else (this.state[sI + 1] as number) += count;
           }
-          this.state[sI >> 1].present = this.itemShorten(start, sOffset);
-          return this.construct(
-            [{ present: replacedValues, deleted: 0 }],
-            count
-          );
+          this.state[sI] = this.itemShorten(start, sOffset);
+          return this.construct([replacedValues], count);
         }
       } else {
         if (!isPresent) {
@@ -164,51 +143,50 @@ export abstract class SparseItems<I> {
 
     // Items in the range [sI, eI] are replaced (not kept in their entirety).
     // sI and eI may be partially kept; if so, we add the kept slices to newItems.
-    const replacedItems: Pair<I>[] = [];
+    const replacedItems: (I | number)[] = [];
     if (sI === eI) {
       // replacedItems = [start.slice(sOffset, eOffset)]
       this.appendItemSlice(replacedItems, sI, sOffset, eOffset);
     } else {
       // replacedItems = [start.slice(sOffset), ...this.state.slice(sI + 1, eI), end.slice(0, eOffset)]
       this.appendItemSlice(replacedItems, sI, sOffset);
-      // TODO: append opt
-      for (let i = sI + 1; i < eI; i++) {
-        if (i % 2 === 0)
-          this.appendPresent(replacedItems, this.state[i >> 1].present);
-        else this.appendDeleted(replacedItems, this.state[i >> 1].deleted);
-      }
+      // Guaranteed that previous item is not [] (since sOffset < start.length)
+      // and others alternate, so can just append.
+      for (let i = sI + 1; i < eI; i++) replacedItems.push(this.state[i]);
       this.appendItemSlice(replacedItems, eI, 0, eOffset);
     }
 
     // newItems = [
-    //     present part of sI if it's deleted,
     //     start.slice(0, sOffset) if non-empty,
     //     item,
     //     end.slice(eOffset) if non-empty
     // ]
-    const newItems: Pair<I>[] = [];
-    if (sI % 2 === 1)
-      newItems.push({ present: this.state[sI >> 1].present, deleted: 0 });
+    const newItems: (I | number)[] = [];
     this.appendItemSlice(newItems, sI, 0, sOffset);
     this.appendItem(newItems, item, isPresent);
     this.appendItemSlice(newItems, eI, eOffset);
 
     // Also append the trailing kept items (> eI).
-    // TODO: append opt
-    for (let i = eI + 1; i < 2 * this.state.length; i++) {
-      if (i % 2 === 0) this.appendPresent(newItems, this.state[i >> 1].present);
-      else this.appendDeleted(newItems, this.state[i >> 1].deleted);
+    // After the first (which is nontrivial b/c eI + 1 > 0),
+    // we can just append - already alternates.
+    if (eI + 1 < this.state.length) {
+      this.appendItem(newItems, this.state[eI + 1], eI % 2 === 1);
+    }
+    for (let i = eI + 2; i < this.state.length; i++) {
+      newItems.push(this.state[i]);
     }
 
     // Delete replaced & trailing items.
-    this.state.splice(sI >> 1);
+    this.state.splice(sI);
 
     // Append new and trailing items.
     // After the second (which is nontrivial),
     // we can just append - already alternates.
-    this.appendPresent(this.state, newItems[0].present);
-    this.appendDeleted(this.state, newItems[0].deleted);
-    for (let j = 1; j < newItems.length; j++) {
+    this.appendPresent(this.state, newItems[0] as I);
+    if (1 < newItems.length) {
+      this.appendDeleted(this.state, newItems[1] as number);
+    }
+    for (let j = 2; j < newItems.length; j++) {
       this.state.push(newItems[j]);
     }
 
@@ -235,11 +213,11 @@ export abstract class SparseItems<I> {
     // Reset remaining to the start of index i.
     let remaining = indexDiff + offset;
 
-    for (; i < 2 * this.state.length; i++) {
+    for (; i < this.state.length; i++) {
       const itemLength =
         i % 2 === 0
-          ? this.itemLength(this.state[i >> 1].present)
-          : this.state[i >> 1].deleted;
+          ? this.itemLength(this.state[i] as I)
+          : (this.state[i] as number);
       if (remaining < itemLength || (includeEnds && remaining === itemLength)) {
         return [i, remaining];
       }
@@ -250,7 +228,7 @@ export abstract class SparseItems<I> {
   }
 
   private appendItem(
-    arr: Pair<I>[],
+    arr: (I | number)[],
     item: I | number,
     isPresent: boolean
   ): void {
@@ -263,7 +241,7 @@ export abstract class SparseItems<I> {
    * SparseArray format.
    */
   private appendItemSlice(
-    items: Pair<I>[],
+    items: (I | number)[],
     index: number,
     start: number,
     end?: number
@@ -271,33 +249,35 @@ export abstract class SparseItems<I> {
     if (index % 2 === 0) {
       this.appendPresent(
         items,
-        this.itemSlice(this.state[index >> 1].present, start, end)
+        this.itemSlice(this.state[index] as I, start, end)
       );
     } else
-      this.appendDeleted(
-        items,
-        (end ?? this.state[index >> 1].deleted) - start
-      );
+      this.appendDeleted(items, (end ?? (this.state[index] as number)) - start);
   }
 
-  private appendPresent(arr: Pair<I>[], present: I): void {
+  private appendPresent(arr: (I | number)[], present: I): void {
     // OPT: Enforce non-zero length, so we can skip this check.
     if (this.itemLength(present) === 0) return;
-    if (arr.length === 0) {
-      arr.push({ present, deleted: 0 });
+    if (arr.length % 2 === 0) {
+      // Empty, or ends with deleted item.
+      arr.push(present);
     } else {
-      const last = arr[arr.length - 1];
-      if (last.deleted === 0)
-        last.present = this.itemMerge(last.present, present);
-      else arr.push({ present, deleted: 0 });
+      // Non-empty and ends with present item.
+      arr[arr.length - 1] = this.itemMerge(arr[arr.length - 1] as I, present);
     }
   }
 
-  private appendDeleted(arr: Pair<I>[], deleted: number): void {
-    if (arr.length === 0) {
-      if (deleted !== 0) {
-        arr.push({ present: this.itemNewEmpty(), deleted });
-      }
-    } else arr[arr.length - 1].deleted += deleted;
+  private appendDeleted(arr: (I | number)[], deleted: number): void {
+    if (deleted === 0) return;
+    if (arr.length % 2 === 1) {
+      // Non-empty and ends with present item.
+      arr.push(deleted);
+    } else if (arr.length === 0) {
+      // Empty.
+      arr.push(this.itemNewEmpty(), deleted);
+    } else {
+      // Non-empty and ends with deleted item.
+      (arr[arr.length - 1] as number) += deleted;
+    }
   }
 }
