@@ -1,4 +1,4 @@
-import { SparseArray } from "../src";
+import { arrTypes } from "./array_types";
 import {
   append,
   backspace,
@@ -6,31 +6,7 @@ import {
   martinTrace,
   randomDeletes,
 } from "./traces";
-import { BenchmarkTrace, SparseArrayType, timeOne } from "./util";
-import { SparseIndexesWrapper, SparseTextWrapper } from "./wrappers";
-
-const arrTypes: SparseArrayType[] = [
-  {
-    name: "RLE-templated",
-    construct: <T>() => SparseArray.empty<T>(),
-  },
-  // {
-  //   name: "RLE-direct",
-  //   construct: <T>() => SparseArrayDirect.empty<T>(),
-  // },
-  // {
-  //   name: "list-positions",
-  //   construct: <T>() => new ListPositionsSparseArray<T>(),
-  // },
-  {
-    name: "SparseText",
-    construct: <T>() => new SparseTextWrapper<T>(),
-  },
-  {
-    name: "SparseIndexes",
-    construct: <T>() => new SparseIndexesWrapper<T>(),
-  },
-];
+import { BenchmarkTrace, timeOne } from "./util";
 
 const traces: BenchmarkTrace[] = [
   append,
@@ -42,7 +18,7 @@ const traces: BenchmarkTrace[] = [
 
 void (async function () {
   for (const trace of traces) {
-    for (const arrType of arrTypes) {
+    for (const arrType of Object.values(arrTypes)) {
       await timeOne(trace, arrType);
     }
     console.log();

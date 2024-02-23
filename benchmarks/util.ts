@@ -1,14 +1,11 @@
 import * as math from "mathjs";
 import seedrandom from "seedrandom";
 
-export interface ISparseArray<T> {
-  set(index: number, ...values: T[]): ISparseArray<T>;
-  delete(index: number, count?: number): ISparseArray<T>;
-}
-
 export interface SparseArrayType {
   name: string;
-  construct: <T>() => ISparseArray<T>;
+  construct: () => object;
+  set(arr: object, index: number, ...values: unknown[]): object;
+  delete(arr: object, index: number, count?: number): object;
 }
 
 export type BenchmarkTrace = (
@@ -38,4 +35,12 @@ export async function timeOne(trace: BenchmarkTrace, arrType: SparseArrayType) {
     "\t",
     `${mean.toFixed(1)} +- ${stddev.toFixed(1)} ms`
   );
+}
+
+let profile = false;
+export function setProfile(newProfile: boolean) {
+  profile = newProfile;
+}
+export function getProfile(): boolean {
+  return profile;
 }
