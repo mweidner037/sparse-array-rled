@@ -1,5 +1,3 @@
-import { WrapSparseArrayLike } from "./wrappers";
-
 // This file copies the library's SparseArray implementation, but with a "direct"
 // approach instead of a SparseItems template + subclass.
 // It lets us check whether the templated style introduces too much overhead.
@@ -351,5 +349,3 @@ export class SparseArrayDirect<T> {
     } else appendDeleted(items, (end ?? (this.state[index] as number)) - start);
   }
 }
-
-export const SparseArrayDirectImpl = WrapSparseArrayLike(SparseArrayDirect);

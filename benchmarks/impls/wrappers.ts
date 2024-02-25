@@ -11,12 +11,15 @@ export interface SparseArrayLike {
 /**
  * Given a SparseArray-like class, returns the obvious Implementation.
  */
-export function WrapSparseArrayLike(SparseArrayLikeClass: {
-  name: string;
-  empty(): SparseArrayLike;
-}): Implementation {
+export function WrapSparseArrayLike(
+  SparseArrayLikeClass: {
+    name: string;
+    empty(): SparseArrayLike;
+  },
+  name?: string
+): Implementation {
   return {
-    name: SparseArrayLikeClass.name,
+    name: name ?? SparseArrayLikeClass.name,
     newEmpty() {
       return SparseArrayLikeClass.empty();
     },
