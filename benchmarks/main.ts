@@ -1,4 +1,4 @@
-import { arrTypes } from "./array_types";
+import { allImpls } from "./impls";
 import {
   append,
   backspace,
@@ -18,8 +18,9 @@ const traces: BenchmarkTrace[] = [
 
 void (async function () {
   for (const trace of traces) {
-    for (const arrType of Object.values(arrTypes)) {
-      await timeOne(trace, arrType);
+    // TODO: randomize order
+    for (const impl of allImpls) {
+      await timeOne(trace, impl);
     }
     console.log();
   }

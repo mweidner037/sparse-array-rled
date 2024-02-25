@@ -1,4 +1,10 @@
-// TODO: remove, if benchmarks show min difference with templated version.
+import { WrapSparseArrayLike } from "./wrappers";
+
+// This file copies the library's SparseArray implementation, but with a "direct"
+// approach instead of a SparseItems template + subclass.
+// It lets us check whether the templated style introduces too much overhead.
+
+// TODO: update this file to match the final SparseItems implementation.
 
 function appendPresent<T>(state: (T[] | number)[], present: T[]): void {
   // OPT: Enforce non-zero length, so we can skip this check.
@@ -345,3 +351,5 @@ export class SparseArrayDirect<T> {
     } else appendDeleted(items, (end ?? (this.state[index] as number)) - start);
   }
 }
+
+export const SparseArrayDirectImpl = WrapSparseArrayLike(SparseArrayDirect);

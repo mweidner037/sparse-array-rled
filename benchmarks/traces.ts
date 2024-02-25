@@ -1,52 +1,52 @@
 import fs from "fs";
 import seedrandom from "seedrandom";
-import { SparseArrayType, getProfile } from "./util";
+import { Implementation, getProfile } from "./util";
 
 // Each basic trace performs 1,000,000 set/delete ops.
 
-export function append(arrType: SparseArrayType): void {
+export function append(impl: Implementation): void {
   for (let t = 0; t < 10000; t++) {
-    const arr = arrType.construct();
+    const arr = impl.newEmpty();
     for (let i = 0; i < 100; i++) {
-      arrType.set(arr, i, "a");
+      impl.set(arr, i, "a");
     }
   }
 }
 
 const hundredValues = new Array<string>(100).fill("a");
 
-export function backspace(arrType: SparseArrayType): void {
+export function backspace(impl: Implementation): void {
   for (let t = 0; t < 10000; t++) {
-    const arr = arrType.construct();
-    arrType.set(arr, 0, ...hundredValues);
+    const arr = impl.newEmpty();
+    impl.set(arr, 0, ...hundredValues);
     for (let i = 99; i >= 0; i--) {
-      arrType.delete(arr, i);
+      impl.delete(arr, i);
     }
   }
 }
 
 export function randomDeletes(
-  arrType: SparseArrayType,
+  impl: Implementation,
   prng: seedrandom.PRNG
 ): void {
   for (let t = 0; t < 100000; t++) {
-    const arr = arrType.construct();
-    arrType.set(arr, 0, ...hundredValues);
+    const arr = impl.newEmpty();
+    impl.set(arr, 0, ...hundredValues);
     for (let i = 0; i < 10; i++) {
-      arrType.delete(arr, Math.round(prng() * 100));
+      impl.delete(arr, Math.round(prng() * 100));
     }
   }
 }
 
-export function frontAndBack(arrType: SparseArrayType): void {
+export function frontAndBack(impl: Implementation): void {
   for (let t = 0; t < 6670; t++) {
-    const arr = arrType.construct();
+    const arr = impl.newEmpty();
     for (let j = 0; j < 10; j++) {
       for (let i = 0; i < 10; i++) {
-        arrType.set(arr, 10 * j + i, "a");
+        impl.set(arr, 10 * j + i, "a");
       }
       for (let i = 0; i < 5; i++) {
-        arrType.delete(arr, 11 * j - i - 1);
+        impl.delete(arr, 11 * j - i - 1);
       }
     }
   }
@@ -72,19 +72,19 @@ class _TRACE_LIST {
   constructor(readonly bunches = new Map<string, object>()) {}
 }
 
-export async function martinTrace(arrType: SparseArrayType) {
+export async function martinTrace(impl: Implementation) {
   const list = new _TRACE_LIST();
   for (const edit of martinTraceEdits) {
     if (edit.type === "set") {
       let arr = list.bunches.get(edit.bunchID);
       if (arr === undefined) {
-        arr = arrType.construct();
+        arr = impl.newEmpty();
         list.bunches.set(edit.bunchID, arr);
       }
-      arrType.set(arr, edit.index, edit.value);
+      impl.set(arr, edit.index, edit.value);
     } else {
       const arr = list.bunches.get(edit.bunchID)!;
-      arrType.delete(arr, edit.index);
+      impl.delete(arr, edit.index);
     }
   }
   if (getProfile()) {
@@ -94,3 +94,6 @@ export async function martinTrace(arrType: SparseArrayType) {
     console.log(list);
   }
 }
+
+// TODO: get benchmarks
+// TODO: "unit tests" for Implementation? So we can check all of them before trusting the results.

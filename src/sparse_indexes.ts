@@ -85,6 +85,7 @@ export class SparseIndexes extends SparseItems<number> {
     }
   }
 
+  // TODO: add() instead of set()
   /**
    *
    * @param index
