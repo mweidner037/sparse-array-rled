@@ -113,23 +113,25 @@ export abstract class SparseItems<I> {
       if (sOffset < sLength) {
         // Part of start is deleted.
         // Since sOffset > 0, not all of it is deleted.
-        if (sOffset + count < sLength) {
-          // A middle section of start is deleted.
+        if (sOffset + count <= sLength) {
+          // A middle section of start is deleted, and the deletions end within start.
+          // Shorten the existing segment and (if needed) add a new one for the tail.
           const sMid = this.itemSlice(start, sOffset, sOffset + count);
-          // Shorten the existing segment and add a new one for the tail.
-          const sTail = this.itemSlice(start, sOffset + count);
+          if (sOffset + count < sLength) {
+            const sTail = this.itemSlice(start, sOffset + count);
+            this.segments.splice(sI + 1, 0, sTail);
+            this.indexes.splice(sI + 1, 0, this.indexes[sI] + sOffset + count);
+          }
           this.segments[sI] = this.itemShorten(start, sOffset);
-          this.segments.splice(sI + 1, 0, sTail);
-          this.indexes.splice(sI + 1, 0, this.indexes[sI] + sOffset + count);
 
           return this.construct([0], [sMid], count);
         } else {
-          // The tail of start is deleted.
+          // The tail of start is deleted, and later segments may also be affected.
           replacedSegments.push(this.itemSlice(start, sOffset));
           replacedIndexes.push(0);
           // Shorten the existing segment.
           this.segments[sI] = this.itemShorten(start, sOffset);
-          // Continue since other segments may be affected.
+          // Continue since later segments may be affected.
         }
       }
       // Else start is unaffected.
