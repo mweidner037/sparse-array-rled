@@ -98,6 +98,8 @@ export abstract class SparseItems<I> {
   protected _delete(index: number, count: number): this {
     // TODO: count >= 0 check?
 
+    // TODO: update length.
+
     // Avoid trivial-item edge case.
     if (count === 0) return this.constructEmpty();
 
@@ -165,16 +167,38 @@ export abstract class SparseItems<I> {
     }
 
     // Delete [sI + 1, i).
-    this.segments.splice(sI + 1, i - (sI + 1));
-    this.indexes.splice(sI + 1, i - (sI + 1));
+    if (i != sI + 1) {
+      this.segments.splice(sI + 1, i - (sI + 1));
+      this.indexes.splice(sI + 1, i - (sI + 1));
+    }
     return this.construct(replacedIndexes, replacedSegments, count);
   }
 
   protected _set(index: number, item: I): this {
     const count = this.itemLength(item);
 
+    // TODO: update length.
+
     // Avoid trivial-item edge case.
     if (count === 0) return this.constructEmpty();
+
+    // Optimize common case: append.
+    if (this.indexes.length !== 0) {
+      const lastIndex = this.indexes[this.indexes.length - 1];
+      const lastSegment = this.segments[this.indexes.length - 1];
+      const lastLength = this.itemLength(lastSegment);
+      if (lastIndex + lastLength == index) {
+        this.segments[this.indexes.length - 1] = this.itemMerge(
+          lastSegment,
+          item
+        );
+        return this.construct([], [], count);
+      } else if (lastIndex + lastLength < index) {
+        this.indexes.push(index);
+        this.segments.push(item);
+        return this.construct([], [], count);
+      }
+    }
 
     const replacedSegments: I[] = [];
     const replacedIndexes: number[] = [];
@@ -257,8 +281,10 @@ export abstract class SparseItems<I> {
 
     // Delete [sI + 1, i).
     if (itemAdded) {
-      this.segments.splice(sI + 1, i - (sI + 1));
-      this.indexes.splice(sI + 1, i - (sI + 1));
+      if (i != sI + 1) {
+        this.segments.splice(sI + 1, i - (sI + 1));
+        this.indexes.splice(sI + 1, i - (sI + 1));
+      }
     } else {
       // Still need to add item, as a new segment.
       this.segments.splice(sI + 1, i - (sI + 1), item);

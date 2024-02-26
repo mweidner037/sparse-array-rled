@@ -1,6 +1,6 @@
 import fs from "fs";
 import seedrandom from "seedrandom";
-import { Implementation, getProfile } from "./util";
+import { Implementation } from "./util";
 
 // Each basic trace performs 1,000,000 set/delete ops.
 
@@ -72,7 +72,11 @@ class _TRACE_LIST {
   constructor(readonly bunches = new Map<string, object>()) {}
 }
 
-export async function martinTrace(impl: Implementation) {
+export async function martinTrace(
+  impl: Implementation,
+  _prng: seedrandom.PRNG,
+  profile: boolean
+) {
   const list = new _TRACE_LIST();
   for (const edit of martinTraceEdits) {
     if (edit.type === "set") {
@@ -87,7 +91,7 @@ export async function martinTrace(impl: Implementation) {
       impl.delete(arr, edit.index);
     }
   }
-  if (getProfile()) {
+  if (profile) {
     console.log("Ready to profile");
     await new Promise((resolve) => setTimeout(resolve, 100000000));
     // Keep list in scope.

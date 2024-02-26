@@ -13,7 +13,7 @@ export const allImpls: Implementation[] = [
   SparseIndexesImpl,
   WrapSparseArrayLike(SparseArrayDirect),
   WrapSparseArrayLike(SparseArrayPairs, "SparseArrayPairs"),
-  WrapSparseArrayLike(SparseArrayAlternating, "SparseArrayAlternating"),
+  WrapSparseArrayLike(SparseArrayAlternating, "SparseArrayAltern"),
   PlainArrayImpl,
   PlainArray2Impl,
   ListPositionsImpl,

@@ -1,6 +1,6 @@
 import { allImpls } from "./impls";
 import { martinTrace } from "./traces";
-import { setProfile, timeOne } from "./util";
+import { timeOne } from "./util";
 
 // Usage: npm run profile [implName = "SparseArray"]
 
@@ -12,8 +12,6 @@ if (impl === undefined) {
   process.exit(1);
 }
 
-setProfile(true);
-
 void (async function () {
-  await timeOne(martinTrace, impl);
+  await timeOne(martinTrace, impl, true);
 })();

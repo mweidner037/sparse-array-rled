@@ -17,17 +17,18 @@ export interface Implementation {
 
 export type BenchmarkTrace = (
   arrType: Implementation,
-  prng: seedrandom.PRNG
+  prng: seedrandom.PRNG,
+  profile: boolean
 ) => void | Promise<void>;
 
-export async function timeOne(trace: BenchmarkTrace, impl: Implementation) {
+export async function timeOne(trace: BenchmarkTrace, impl: Implementation, profile = false) {
   const timesMS: number[] = [];
   for (let i = -5; i < 10; i++) {
     const prng = seedrandom("42");
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     const startTime = process.hrtime.bigint();
-    await trace(impl, prng);
+    await trace(impl, prng, profile && (i === 9));
     const timeMS =
       new Number(process.hrtime.bigint() - startTime).valueOf() / 1000000;
     if (i >= 0) timesMS.push(timeMS);
@@ -40,12 +41,4 @@ export async function timeOne(trace: BenchmarkTrace, impl: Implementation) {
       trace.name.padEnd(20) +
       `${mean.toFixed(1)} +- ${stddev.toFixed(1)} ms`
   );
-}
-
-let profile = false;
-export function setProfile(newProfile: boolean) {
-  profile = newProfile;
-}
-export function getProfile(): boolean {
-  return profile;
 }
