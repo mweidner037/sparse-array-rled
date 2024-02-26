@@ -3,38 +3,48 @@ import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
 import { SparseArray } from "../src";
 
-function getState<T>(arr: SparseArray<T>): (T[] | number)[] {
+function getState<T>(arr: SparseArray<T>): {
+  indexes: number[];
+  segments: T[];
+} {
   // @ts-expect-error Ignore protected
-  return arr.state;
+  return { indexes: arr.indexes, segments: arr.segments };
 }
 
-function validate(items: (string[] | number)[], trimmed = false): void {
-  // Alternation rule.
-  for (let i = 0; i < items.length; i++) {
-    if (i % 2 === 0) assert.isArray(items[i]);
-    else assert.typeOf(items[i], "number");
+function validate({
+  indexes,
+  segments,
+}: {
+  indexes: number[];
+  segments: string[];
+}): void {
+  // In order.
+  for (let i = 0; i < indexes.length - 1; i++) {
+    assert.isBelow(indexes[i], indexes[i + 1]);
   }
 
-  // No empty items except the first.
-  for (let i = 1; i < items.length; i++) {
-    if (i % 2 === 0) assert.isNotEmpty(items[i]);
-    else assert.notStrictEqual(items[i], 0, JSON.stringify(items));
+  // No empty items.
+  for (let i = 0; i < segments.length; i++) {
+    assert.notStrictEqual(segments[i].length, 0);
   }
 
-  if (trimmed && items.length !== 0) {
-    // Check trimmed.
-    assert(items.length % 2 === 1, "Ends in deleted item");
-    if (items.length === 1) assert.isNotEmpty(items[0]);
+  // No overlapping or joinable segments.
+  for (let i = 0; i < indexes.length - 1; i++) {
+    const thisEnd = indexes[i] + segments[i].length;
+    const nextStart = indexes[i + 1];
+    assert.isBelow(thisEnd, nextStart);
   }
 }
 
-function getLength(items: (string[] | number)[]): number {
-  let ans = 0;
-  for (let i = 0; i < items.length; i++) {
-    if (i % 2 === 0) ans += (items[i] as string[]).length;
-    else ans += items[i] as number;
-  }
-  return ans;
+function getLength({
+  indexes,
+  segments,
+}: {
+  indexes: number[];
+  segments: string[];
+}): number {
+  if (indexes.length === 0) return 0;
+  return indexes.at(-1)! + segments.at(-1)!.length;
 }
 
 function check(
@@ -42,8 +52,8 @@ function check(
   values: (string | null)[],
   trimmed = false
 ) {
-  const items = getState(arr);
-  validate(items, trimmed);
+  const state = getState(arr);
+  validate(state);
 
   let beforeCount = 0;
   for (let i = 0; i < values.length; i++) {
@@ -60,7 +70,7 @@ function check(
     "size"
   );
   if (trimmed) {
-    assert.strictEqual(getLength(items), values.length, "length");
+    assert.strictEqual(getLength(state), values.length, "length");
   }
 
   // getInfo should also work on indexes past the length.
