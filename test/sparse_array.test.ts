@@ -3,6 +3,8 @@ import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
 import { SparseArray } from "../src";
 
+const DEBUG = false;
+
 function getState<T>(arr: SparseArray<T>): {
   indexes: number[];
   segments: T[];
@@ -18,6 +20,10 @@ function validate({
   indexes: number[];
   segments: string[];
 }): void {
+  // No nonsense i's.
+  assert.doesNotHaveAnyKeys(indexes, ["-1"]);
+  assert.doesNotHaveAnyKeys(segments, ["-1"]);
+
   // In order.
   for (let i = 0; i < indexes.length - 1; i++) {
     assert.isBelow(indexes[i], indexes[i + 1]);
@@ -101,6 +107,11 @@ class Checker {
   }
 
   set(index: number, newValues: string[]) {
+    if (DEBUG) {
+      console.log("\nset", index, newValues);
+      console.log("before:  ", getState(this.arr));
+    }
+
     const replacedValues = new Array<string | null>(newValues.length);
     for (let i = 0; i < newValues.length; i++) {
       replacedValues[i] = this.values[index + i] ?? null;
@@ -116,6 +127,11 @@ class Checker {
       this.values[index + i] = newValues[i];
     }
 
+    if (DEBUG) {
+      console.log("after:   ", getState(this.arr));
+      console.log("replaced:", getState(replaced));
+    }
+
     // Check agreement.
     this.check();
     check(replaced, replacedValues);
@@ -126,12 +142,22 @@ class Checker {
   }
 
   delete(index: number, count: number) {
+    if (DEBUG) {
+      console.log("\ndelete", index, count);
+      console.log("before:  ", getState(this.arr));
+    }
+
     const replacedValues = new Array<string | null>(count);
     for (let i = 0; i < count; i++) {
       replacedValues[i] = this.values[index + i] ?? null;
     }
 
     const replaced = this.arr.delete(index, count);
+
+    if (DEBUG) {
+      console.log("after:   ", getState(this.arr));
+      console.log("replaced:", getState(replaced));
+    }
 
     // Update this.values in parallel.
     for (let i = this.values.length; i < index + count; i++) {

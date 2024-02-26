@@ -150,10 +150,10 @@ export abstract class SparseItems<I> {
         replacedSegments.push(
           this.itemSlice(segment, 0, index + count - segIndex)
         );
-        replacedIndexes.push(segIndex + segLength - index);
+        replacedIndexes.push(segIndex - index);
         // Fix segment in-place.
-        this.segments[sI] = this.itemSlice(segment, index + count - segIndex);
-        this.indexes[sI] = index + count;
+        this.segments[i] = this.itemSlice(segment, index + count - segIndex);
+        this.indexes[i] = index + count;
         break;
       } else {
         // All of segment is deleted.
@@ -164,8 +164,9 @@ export abstract class SparseItems<I> {
       }
     }
 
-    this.segments.splice(sI + 1, sI + 1 - i);
-    this.indexes.splice(sI + 1, sI + 1 - i);
+    // Delete [sI + 1, i).
+    this.segments.splice(sI + 1, i - (sI + 1));
+    this.indexes.splice(sI + 1, i - (sI + 1));
     return this.construct(replacedIndexes, replacedSegments, count);
   }
 
@@ -178,14 +179,14 @@ export abstract class SparseItems<I> {
     const replacedSegments: I[] = [];
     const replacedIndexes: number[] = [];
 
-    const [sI, sOffset] = this.getSegment(index, true);
+    const [sI, sOffset] = this.getSegment(index, false);
     let itemAdded = false;
     if (sI !== -1) {
       const start = this.segments[sI];
       const sLength = this.itemLength(start);
       if (sOffset <= sLength) {
         // Part of start is overwritten, and/or start is appended to.
-        // Since sOffset > 0, not all of it is overwritten.
+        // Note: possibly sOffset = 0.
         if (sOffset + count <= sLength) {
           // item is contained within start.
           const sMid = this.itemSlice(start, sOffset, sOffset + count);
@@ -226,7 +227,7 @@ export abstract class SparseItems<I> {
           replacedSegments.push(
             this.itemSlice(segment, 0, index + count - segIndex)
           );
-          replacedIndexes.push(segIndex + segLength - index);
+          replacedIndexes.push(segIndex - index);
           tail = this.itemSlice(segment, index + count - segIndex);
         } else {
           // Nothing actually overwritten (head is trivial);
@@ -254,13 +255,14 @@ export abstract class SparseItems<I> {
       }
     }
 
+    // Delete [sI + 1, i).
     if (itemAdded) {
-      this.segments.splice(sI + 1, sI + 1 - i);
-      this.indexes.splice(sI + 1, sI + 1 - i);
+      this.segments.splice(sI + 1, i - (sI + 1));
+      this.indexes.splice(sI + 1, i - (sI + 1));
     } else {
       // Still need to add item, as a new segment.
-      this.segments.splice(sI + 1, sI + 1 - i, item);
-      this.indexes.splice(sI + 1, sI + 1 - i, index);
+      this.segments.splice(sI + 1, i - (sI + 1), item);
+      this.indexes.splice(sI + 1, i - (sI + 1), index);
     }
     return this.construct(replacedIndexes, replacedSegments, count);
   }
