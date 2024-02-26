@@ -185,7 +185,11 @@ export abstract class SparseItems<I> {
     if (count === 0) return this.constructEmpty();
 
     // Optimize common case: append.
-    if (this.indexes.length !== 0) {
+    if (this.indexes.length === 0) {
+      this.indexes.push(index);
+      this.segments.push(item);
+      return this.construct([], [], count);
+    } else {
       const lastIndex = this.indexes[this.indexes.length - 1];
       const lastSegment = this.segments[this.indexes.length - 1];
       const lastLength = this.itemLength(lastSegment);
