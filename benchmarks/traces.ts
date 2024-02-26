@@ -89,6 +89,7 @@ export async function martinTrace(
     } else {
       const arr = list.bunches.get(edit.bunchID)!;
       impl.delete(arr, edit.index);
+      if (impl.isEmpty(arr)) list.bunches.delete(edit.bunchID);
     }
   }
   if (profile) {

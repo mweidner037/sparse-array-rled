@@ -1,49 +1,49 @@
-SparseArray         append              62.6 +- 7.5 ms
-SparseText          append              100.9 +- 6.3 ms
-SparseIndexes       append              53.2 +- 10.4 ms
-SparseArrayDirect   append              89.1 +- 2.9 ms
-SparseArrayPairs    append              101.4 +- 7.6 ms
-SparseArrayAlternatingappend              90.0 +- 4.7 ms
-PlainArray          append              206.5 +- 2.2 ms
-PlainArray2         append              54.4 +- 6.0 ms
-ListPositions       append              394.8 +- 8.7 ms
+SparseArray         append              73.8 +- 23.9 ms
+SparseText          append              121.4 +- 30.0 ms
+SparseIndexes       append              45.4 +- 10.1 ms
+SparseArrayDirect   append              85.7 +- 7.0 ms
+SparseArrayPairs    append              93.4 +- 8.8 ms
+SparseArrayAltern   append              89.1 +- 3.2 ms
+PlainArray          append              203.1 +- 8.8 ms
+PlainArray2         append              54.9 +- 3.0 ms
+ListPositions       append              423.8 +- 39.3 ms
 
-SparseArray         backspace           155.6 +- 9.7 ms
-SparseText          backspace           145.4 +- 9.3 ms
-SparseIndexes       backspace           106.4 +- 2.3 ms
-SparseArrayDirect   backspace           322.9 +- 5.8 ms
-SparseArrayPairs    backspace           186.2 +- 7.6 ms
-SparseArrayAlternatingbackspace           191.1 +- 17.7 ms
-PlainArray          backspace           189.5 +- 4.1 ms
-PlainArray2         backspace           224.3 +- 3.6 ms
-ListPositions       backspace           567.0 +- 7.6 ms
+SparseArray         backspace           131.5 +- 8.1 ms
+SparseText          backspace           99.5 +- 12.1 ms
+SparseIndexes       backspace           74.2 +- 7.6 ms
+SparseArrayDirect   backspace           364.0 +- 38.7 ms
+SparseArrayPairs    backspace           193.6 +- 3.3 ms
+SparseArrayAltern   backspace           192.5 +- 12.7 ms
+PlainArray          backspace           199.9 +- 26.9 ms
+PlainArray2         backspace           222.3 +- 6.5 ms
+ListPositions       backspace           644.3 +- 52.0 ms
 
-SparseArray         randomDeletes       389.0 +- 11.3 ms
-SparseText          randomDeletes       466.9 +- 8.1 ms
-SparseIndexes       randomDeletes       240.9 +- 2.8 ms
-SparseArrayDirect   randomDeletes       467.3 +- 8.0 ms
-SparseArrayPairs    randomDeletes       382.2 +- 4.3 ms
-SparseArrayAlternatingrandomDeletes       390.6 +- 14.5 ms
-PlainArray          randomDeletes       337.6 +- 18.0 ms
-PlainArray2         randomDeletes       291.3 +- 12.0 ms
-ListPositions       randomDeletes       863.7 +- 19.2 ms
+SparseArray         randomDeletes       388.2 +- 16.6 ms
+SparseText          randomDeletes       467.4 +- 14.2 ms
+SparseIndexes       randomDeletes       237.4 +- 5.3 ms
+SparseArrayDirect   randomDeletes       484.8 +- 4.0 ms
+SparseArrayPairs    randomDeletes       414.3 +- 10.0 ms
+SparseArrayAltern   randomDeletes       395.0 +- 5.7 ms
+PlainArray          randomDeletes       337.0 +- 10.4 ms
+PlainArray2         randomDeletes       307.0 +- 7.6 ms
+ListPositions       randomDeletes       907.8 +- 32.9 ms
 
-SparseArray         frontAndBack        102.7 +- 3.4 ms
-SparseText          frontAndBack        121.4 +- 5.9 ms
-SparseIndexes       frontAndBack        72.8 +- 6.7 ms
-SparseArrayDirect   frontAndBack        171.7 +- 3.0 ms
-SparseArrayPairs    frontAndBack        141.6 +- 9.2 ms
-SparseArrayAlternatingfrontAndBack        138.7 +- 9.4 ms
-PlainArray          frontAndBack        174.3 +- 4.3 ms
-PlainArray2         frontAndBack        99.7 +- 1.4 ms
-ListPositions       frontAndBack        582.1 +- 4.1 ms
+SparseArray         frontAndBack        101.3 +- 4.7 ms
+SparseText          frontAndBack        115.1 +- 7.1 ms
+SparseIndexes       frontAndBack        67.0 +- 8.9 ms
+SparseArrayDirect   frontAndBack        182.2 +- 11.7 ms
+SparseArrayPairs    frontAndBack        151.8 +- 6.2 ms
+SparseArrayAltern   frontAndBack        152.2 +- 7.0 ms
+PlainArray          frontAndBack        176.6 +- 13.1 ms
+PlainArray2         frontAndBack        100.0 +- 1.6 ms
+ListPositions       frontAndBack        594.5 +- 11.3 ms
 
-SparseArray         martinTrace         59.2 +- 13.7 ms
-SparseText          martinTrace         69.4 +- 5.2 ms
-SparseIndexes       martinTrace         53.6 +- 6.4 ms
-SparseArrayDirect   martinTrace         83.0 +- 10.4 ms
-SparseArrayPairs    martinTrace         76.9 +- 7.5 ms
-SparseArrayAlternatingmartinTrace         80.2 +- 8.9 ms
-PlainArray          martinTrace         84.1 +- 7.1 ms
-PlainArray2         martinTrace         55.7 +- 3.9 ms
-ListPositions       martinTrace         248.5 +- 4.3 ms
+SparseArray         martinTrace         64.0 +- 9.4 ms
+SparseText          martinTrace         63.5 +- 8.6 ms
+SparseIndexes       martinTrace         46.1 +- 9.2 ms
+SparseArrayDirect   martinTrace         82.2 +- 6.6 ms
+SparseArrayPairs    martinTrace         81.4 +- 8.7 ms
+SparseArrayAltern   martinTrace         75.2 +- 6.1 ms
+PlainArray          martinTrace         85.6 +- 8.2 ms
+PlainArray2         martinTrace         56.6 +- 7.0 ms
+ListPositions       martinTrace         238.2 +- 7.0 ms

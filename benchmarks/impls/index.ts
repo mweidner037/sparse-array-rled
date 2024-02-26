@@ -1,16 +1,20 @@
+import { SparseArray, SparseIndexes, SparseText } from "../../src";
 import { Implementation } from "../util";
 import { SparseArray as SparseArrayAlternating } from "./alternating/sparse_array";
-import { SparseArrayImpl, SparseIndexesImpl, SparseTextImpl } from "./library";
 import { ListPositionsImpl } from "./list_positions";
 import { SparseArray as SparseArrayPairs } from "./pairs/sparse_array";
 import { PlainArray2Impl, PlainArrayImpl } from "./plain_array";
 import { SparseArrayDirect } from "./sparse_array_direct";
-import { WrapSparseArrayLike } from "./wrappers";
+import {
+  WrapSparseArrayLike,
+  WrapSparseIndexesLike,
+  WrapSparseTextLike,
+} from "./wrappers";
 
 export const allImpls: Implementation[] = [
-  SparseArrayImpl,
-  SparseTextImpl,
-  SparseIndexesImpl,
+  WrapSparseArrayLike(SparseArray),
+  WrapSparseTextLike(SparseText),
+  WrapSparseIndexesLike(SparseIndexes),
   WrapSparseArrayLike(SparseArrayDirect),
   WrapSparseArrayLike(SparseArrayPairs, "SparseArrayPairs"),
   WrapSparseArrayLike(SparseArrayAlternating, "SparseArrayAltern"),

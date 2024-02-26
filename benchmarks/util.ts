@@ -10,7 +10,8 @@ import seedrandom from "seedrandom";
  */
 export interface Implementation {
   name: string;
-  newEmpty: () => object;
+  newEmpty(): object;
+  isEmpty(arr: object): boolean;
   set(arr: object, index: number, ...values: unknown[]): object;
   delete(arr: object, index: number, count?: number): object;
 }
@@ -21,14 +22,18 @@ export type BenchmarkTrace = (
   profile: boolean
 ) => void | Promise<void>;
 
-export async function timeOne(trace: BenchmarkTrace, impl: Implementation, profile = false) {
+export async function timeOne(
+  trace: BenchmarkTrace,
+  impl: Implementation,
+  profile = false
+) {
   const timesMS: number[] = [];
   for (let i = -5; i < 10; i++) {
     const prng = seedrandom("42");
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     const startTime = process.hrtime.bigint();
-    await trace(impl, prng, profile && (i === 9));
+    await trace(impl, prng, profile && i === 9);
     const timeMS =
       new Number(process.hrtime.bigint() - startTime).valueOf() / 1000000;
     if (i >= 0) timesMS.push(timeMS);

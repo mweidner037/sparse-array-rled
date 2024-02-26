@@ -5,6 +5,11 @@ export const PlainArrayImpl: Implementation = {
   newEmpty() {
     return [];
   },
+  isEmpty(arr: object) {
+    // TODO: also if arr is all holes.
+    const arr2 = arr as unknown[];
+    return arr2.length === 0;
+  },
   set(arr: object, index: number, ...values: unknown[]) {
     const arr2 = arr as unknown[];
     const replaced = arr2.slice(index, index + values.length);
@@ -30,6 +35,11 @@ export const PlainArray2Impl: Implementation = {
   name: "PlainArray2",
   newEmpty() {
     return [];
+  },
+  isEmpty(arr: object) {
+    // TODO: also if arr is all holes.
+    const arr2 = arr as unknown[];
+    return arr2.length === 0;
   },
   set(arr: object, index: number, ...values: unknown[]) {
     const arr2 = arr as unknown[];

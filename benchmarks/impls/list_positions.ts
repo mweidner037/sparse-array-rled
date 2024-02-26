@@ -19,8 +19,13 @@ type ItemsWrapper = {
 export const ListPositionsImpl: Implementation = {
   name: "ListPositions",
 
-  newEmpty: function (): object {
+  newEmpty(): object {
     return { items: [] };
+  },
+
+  isEmpty(arr: object) {
+    const wrapper = arr as ItemsWrapper;
+    return wrapper.items.length === 0;
   },
 
   set: function (arr: object, index: number, ...values: unknown[]): object {
