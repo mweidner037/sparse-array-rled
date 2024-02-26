@@ -1,35 +1,23 @@
-// Experimental implementation that stores its state as an "index array"
-// telling you where each present segment starts, plus the segments
-// in a parallel array.
-// - Possibility of binary search in locate (TODO: need get/find benchmarks to really exercise this)
-// - Hope that index array is optimized by the runtime for being a small-int array.
-// - Parallel arrays should be smaller than array of pair objects.
-
 export abstract class SparseItems<I> {
-  // indexes and segments are in parallel: always matching lengths, possibly 0.
-  protected readonly indexes: number[];
-  protected readonly segments: I[];
+  /**
+   * Subclasses: don't mutate.
+   */
+  protected readonly state: (I | number)[];
+  /**
+   * Subclasses: don't mutate.
+   */
+  protected _length: number;
 
-  // TODO: optional set-length (beyond last present value), for replaced arrays.
-
-  protected constructor(indexes: number[], segments: I[]) {
-    this.indexes = indexes;
-    this.segments = segments;
+  protected constructor(state: (I | number)[], length: number) {
+    this.state = state;
+    this._length = length;
   }
 
-  get length(): number {
-    if (this.indexes.length === 0) return 0;
-    return (
-      this.indexes[this.indexes.length - 1] +
-      this.itemLength(this.segments[this.segments.length - 1])
-    );
-  }
+  protected abstract construct(state: (I | number)[], length: number): this;
 
-  protected abstract construct(index: number[], segments: I[]): this;
-
-  // TODO: use length?
   protected constructEmpty(length = 0): this {
-    return this.construct([], []);
+    if (length === 0) return this.construct([], 0);
+    else return this.construct([this.itemNewEmpty(), length], length);
   }
 
   protected abstract itemNewEmpty(): I;
@@ -58,16 +46,33 @@ export abstract class SparseItems<I> {
    */
   protected abstract itemShorten(item: I, newLength: number): I;
 
+  get length(): number {
+    return this._length;
+  }
+
   size(): number {
     let size = 0;
-    for (const segment of this.segments) {
-      size += this.itemLength(segment);
+    for (let i = 0; i < this.state.length; i += 2) {
+      size += this.itemLength(this.state[i] as I);
     }
     return size;
   }
 
   isEmpty(): boolean {
-    return this.indexes.length === 0;
+    return (
+      this.state.length === 0 ||
+      (this.state.length === 2 && this.itemLength(this.state[0] as I) === 0)
+    );
+  }
+
+  trim(): void {
+    if (this.state.length % 2 === 0 && this.state.length !== 0) {
+      const lastDeleted = this.state.pop() as number;
+      this._length -= lastDeleted;
+    }
+    if (this.state.length === 1 && this.itemLength(this.state[0] as I) === 0) {
+      this.state.pop();
+    }
   }
 
   protected setOrDelete(index: number, item: I, isPresent: true): this;
@@ -82,12 +87,9 @@ export abstract class SparseItems<I> {
     isPresent: boolean
   ): this {
     const count = isPresent ? this.itemLength(item as I) : (item as number);
-    // Avoid trivial-item edge case.
-    if (count === 0) return this.constructEmpty();
 
     // Optimize common case: append.
-    const _length = this.length;
-    if (index >= _length) {
+    if (index >= this._length) {
       this.appendDeleted(this.state, index - this._length);
       this.appendItem(this.state, item, isPresent);
       this._length = index + count;
@@ -99,6 +101,10 @@ export abstract class SparseItems<I> {
       this.appendDeleted(this.state, index + count - this._length);
       this._length = index + count;
     }
+
+    // Avoid trivial-item edge case.
+    // Note that we still update this._length above.
+    if (count === 0) return this.constructEmpty();
 
     const [sI, sOffset] = this.locate(index);
     const [eI, eOffset] = this.locate(count, true, sI, sOffset);
