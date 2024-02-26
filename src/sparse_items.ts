@@ -4,34 +4,35 @@
 // - Possibility of binary search in locate (TODO: need get/find benchmarks to really exercise this)
 // - Hope that index array is optimized by the runtime for being a small-int array.
 // - Parallel arrays should be smaller than array of pair objects.
+// - Omit _length on auto-trimmed arrays?
 
 export abstract class SparseItems<I> {
   // indexes and segments are in parallel: always matching lengths, possibly 0.
   protected readonly indexes: number[];
   protected readonly segments: I[];
+  /**
+   * Subclasses: don't mutate.
+   */
+  protected _length: number;
 
-  // TODO: optional set-length (beyond last present value), for replaced arrays.
-
-  protected constructor(indexes: number[], segments: I[]) {
+  protected constructor(indexes: number[], segments: I[], length: number) {
     this.indexes = indexes;
     this.segments = segments;
+    this._length = length;
   }
 
-  get length(): number {
-    if (this.indexes.length === 0) return 0;
-    return (
-      this.indexes[this.indexes.length - 1] +
-      this.itemLength(this.segments[this.segments.length - 1])
-    );
-  }
+  protected abstract construct(
+    indexes: number[],
+    segments: I[],
+    length: number
+  ): this;
 
-  protected abstract construct(index: number[], segments: I[]): this;
-
-  // TODO: use length?
   protected constructEmpty(length = 0): this {
-    return this.construct([], []);
+    if (length === 0) return this.construct([], [], 0);
+    else return this.construct([length], [this.itemNewEmpty()], length);
   }
 
+  // TODO: delete unused abstract methods
   protected abstract itemNewEmpty(): I;
 
   protected abstract itemLength(item: I): number;
@@ -47,7 +48,7 @@ export abstract class SparseItems<I> {
   protected abstract itemSlice(item: I, start: number, end?: number): I;
 
   /**
-   * Replace [index, index + replace.length) with replace's values.
+   * Replace [index, index + replace.length) with replace's values. TODO: might go beyond existing length; should use push instead of overwrite in T[] case.
    *
    * Preferably modify item in-place and return it.
    */
@@ -58,6 +59,15 @@ export abstract class SparseItems<I> {
    */
   protected abstract itemShorten(item: I, newLength: number): I;
 
+  get length(): number {
+    return this._length;
+    // if (this.indexes.length === 0) return 0;
+    // return (
+    //   this.indexes[this.indexes.length - 1] +
+    //   this.itemLength(this.segments[this.segments.length - 1])
+    // );
+  }
+
   size(): number {
     let size = 0;
     for (const segment of this.segments) {
@@ -67,211 +77,218 @@ export abstract class SparseItems<I> {
   }
 
   isEmpty(): boolean {
-    return this.indexes.length === 0;
+    return (
+      this.segments.length === 0 ||
+      (this.segments.length === 1 && this.itemLength(this.segments[0]) === 0)
+    );
   }
 
-  protected setOrDelete(index: number, item: I, isPresent: true): this;
-  protected setOrDelete(
-    index: number,
-    deleteCount: number,
-    isPresent: false
-  ): this;
-  protected setOrDelete(
-    index: number,
-    item: I | number,
-    isPresent: boolean
-  ): this {
-    const count = isPresent ? this.itemLength(item as I) : (item as number);
+  trim(): void {
+    if (this.indexes.length !== 0) {
+      this._length =
+        this.indexes[this.indexes.length - 1] +
+        this.itemLength(this.segments[this.segments.length - 1]);
+    }
+  }
+
+  // TODO: in serializing, use length to infer the last deleted item.
+  // Maybe instead of trim(), just have trimmed option in serializer,
+  // so we can avoid calling trim after each op?
+
+  protected _delete(index: number, count: number): this {
+    // TODO: count >= 0 check?
+
     // Avoid trivial-item edge case.
     if (count === 0) return this.constructEmpty();
 
-    // Optimize common case: append.
-    const _length = this.length;
-    if (index >= _length) {
-      this.appendDeleted(this.state, index - this._length);
-      this.appendItem(this.state, item, isPresent);
-      this._length = index + count;
-      return this.constructEmpty(count);
-    }
+    const replacedSegments: I[] = [];
+    const replacedIndexes: number[] = [];
 
-    // Avoid past-end edge case.
-    if (this._length < index + count) {
-      this.appendDeleted(this.state, index + count - this._length);
-      this._length = index + count;
-    }
+    const [sI, sOffset] = this.getSegment(index, true);
+    if (sI !== -1) {
+      const start = this.segments[sI];
+      const sLength = this.itemLength(start);
+      if (sOffset < sLength) {
+        // Part of start is deleted.
+        // Since sOffset > 0, not all of it is deleted.
+        if (sOffset + count < sLength) {
+          // A middle section of start is deleted.
+          const sMid = this.itemSlice(start, sOffset, sOffset + count);
+          // Shorten the existing segment and add a new one for the tail.
+          const sTail = this.itemSlice(start, sOffset + count);
+          this.segments[sI] = this.itemShorten(start, sOffset);
+          this.segments.splice(sI + 1, 0, sTail);
+          this.indexes.splice(sI + 1, 0, this.indexes[sI] + sOffset + count);
 
-    const [sI, sOffset] = this.locate(index);
-    const [eI, eOffset] = this.locate(count, true, sI, sOffset);
-
-    if (sI === eI) {
-      // Optimize some easy cases that only touch one item (start).
-      if (sI % 2 === 0) {
-        const start = this.state[sI] as I;
-        if (isPresent) {
-          // Just replacing values within start.
-          const replacedValues = this.itemSlice(start, sOffset, eOffset);
-          this.state[sI] = this.itemUpdate(start, sOffset, item as I);
-          return this.construct([replacedValues], count);
-        } else if (sOffset > 0) {
-          // Deleting values at the middle/end of start.
-          const replacedValues = this.itemSlice(start, sOffset, eOffset);
-          if (eOffset < this.itemLength(start)) {
-            const trailingValues = this.itemSlice(start, eOffset);
-            this.state.splice(sI + 1, 0, count, trailingValues);
-          } else {
-            if (sI + 1 === this.state.length) this.state.push(count);
-            else (this.state[sI + 1] as number) += count;
-          }
-          this.state[sI] = this.itemShorten(start, sOffset);
-          return this.construct([replacedValues], count);
+          return this.construct([0], [sMid], count);
+        } else {
+          // The tail of start is deleted.
+          replacedSegments.push(this.itemSlice(start, sOffset));
+          replacedIndexes.push(0);
+          // Shorten the existing segment.
+          this.segments[sI] = this.itemShorten(start, sOffset);
+          // Continue since other segments may be affected.
         }
+      }
+      // Else start is unaffected.
+      // In any case, once we get here, this.segments[sI] is fixed up,
+      // so we don't need to splice it out later - splicing starts at
+      // sI + 1 (which also works when sI = -1).
+    }
+
+    // At the end of this loop, i will be the first index that does *not* need
+    // to be spliced out (it's either after the deleted region
+    // or fixed in-place by the loop).
+    let i = sI + 1;
+    for (; i < this.indexes.length; i++) {
+      const segIndex = this.indexes[i];
+      if (index + count <= segIndex) break;
+      const segment = this.segments[i];
+      const segLength = this.itemLength(segment);
+      if (index + count < segIndex + segLength) {
+        // The head of segment is deleted, but not all of it.
+        replacedSegments.push(
+          this.itemSlice(segment, 0, index + count - segIndex)
+        );
+        replacedIndexes.push(segIndex + segLength - index);
+        // Fix segment in-place.
+        this.segments[sI] = this.itemSlice(segment, index + count - segIndex);
+        this.indexes[sI] = index + count;
+        break;
       } else {
-        if (!isPresent) {
-          // No change: deleted -> deleted.
-          return this.constructEmpty(count);
+        // All of segment is deleted.
+        // Aliasing segment is okay here because we'll splice out our own
+        // pointer to it later.
+        replacedSegments.push(segment);
+        replacedIndexes.push(segIndex - index);
+      }
+    }
+
+    this.segments.splice(sI + 1, sI + 1 - i);
+    this.indexes.splice(sI + 1, sI + 1 - i);
+    return this.construct(replacedIndexes, replacedSegments, count);
+  }
+
+  protected _set(index: number, item: I): this {
+    const count = this.itemLength(item);
+
+    // Avoid trivial-item edge case.
+    if (count === 0) return this.constructEmpty();
+
+    const replacedSegments: I[] = [];
+    const replacedIndexes: number[] = [];
+
+    const [sI, sOffset] = this.getSegment(index, true);
+    let itemAdded = false;
+    if (sI !== -1) {
+      const start = this.segments[sI];
+      const sLength = this.itemLength(start);
+      if (sOffset <= sLength) {
+        // Part of start is overwritten, and/or start is appended to.
+        // Since sOffset > 0, not all of it is overwritten.
+        if (sOffset + count <= sLength) {
+          // item is contained within start.
+          const sMid = this.itemSlice(start, sOffset, sOffset + count);
+          // Modify the existing segment in-place.
+          this.segments[sI] = this.itemUpdate(start, sOffset, item);
+          return this.construct([0], [sMid], count);
+        } else {
+          if (sOffset < sLength) {
+            // The tail of start is overwritten.
+            replacedSegments.push(this.itemSlice(start, sOffset));
+            replacedIndexes.push(0);
+          }
+          // Overwrite & append to the existing segment.
+          this.segments[sI] = this.itemUpdate(start, sOffset, item);
+          // Continue since other segments may be affected.
         }
+        itemAdded = true;
       }
-
-      // Remaining cases fall through to default behavior.
+      // Else start is unaffected.
+      // In any case, once we get here, this.segments[sI] is fixed up,
+      // so we don't need to splice it out later - splicing starts at
+      // sI + 1 (which also works when sI = -1).
     }
 
-    // Items in the range [sI, eI] are replaced (not kept in their entirety).
-    // sI and eI may be partially kept; if so, we add the kept slices to newItems.
-    const replacedItems: (I | number)[] = [];
-    if (sI === eI) {
-      // replacedItems = [start.slice(sOffset, eOffset)]
-      this.appendItemSlice(replacedItems, sI, sOffset, eOffset);
+    // At the end of this loop, i will be the first index that does *not* need
+    // to be spliced out (it's after the affected region).
+    let i = sI + 1;
+    for (; i < this.indexes.length; i++) {
+      const segIndex = this.indexes[i];
+      if (index + count < segIndex) break;
+      const segment = this.segments[i];
+      const segLength = this.itemLength(segment);
+      if (index + count < segIndex + segLength) {
+        // The head of segment is overwritten, but not all of it.
+        // The rest needs to be appended to item's segment.
+        let tail: I;
+        if (index + count > segIndex) {
+          replacedSegments.push(
+            this.itemSlice(segment, 0, index + count - segIndex)
+          );
+          replacedIndexes.push(segIndex + segLength - index);
+          tail = this.itemSlice(segment, index + count - segIndex);
+        } else {
+          // Nothing actually overwritten (head is trivial);
+          // we're just appending segment to item.
+          tail = segment;
+        }
+
+        if (itemAdded) {
+          // Append non-overwritten tail to start.
+          this.segments[sI] = this.itemMerge(this.segments[sI], tail);
+        } else {
+          // Append non-overwritten tail to item, which is added later.
+          item = this.itemMerge(item, tail);
+        }
+
+        // segment still needs to spliced out.
+        i++;
+        break;
+      } else {
+        // All of segment is overwritten.
+        // Aliasing segment is okay here because we'll splice out our own
+        // pointer to it later.
+        replacedSegments.push(segment);
+        replacedIndexes.push(segIndex - index);
+      }
+    }
+
+    if (itemAdded) {
+      this.segments.splice(sI + 1, sI + 1 - i);
+      this.indexes.splice(sI + 1, sI + 1 - i);
     } else {
-      // replacedItems = [start.slice(sOffset), ...this.state.slice(sI + 1, eI), end.slice(0, eOffset)]
-      this.appendItemSlice(replacedItems, sI, sOffset);
-      // Guaranteed that previous item is not [] (since sOffset < start.length)
-      // and others alternate, so can just append.
-      for (let i = sI + 1; i < eI; i++) replacedItems.push(this.state[i]);
-      this.appendItemSlice(replacedItems, eI, 0, eOffset);
+      // Still need to add item, as a new segment.
+      this.segments.splice(sI + 1, sI + 1 - i, item);
+      this.indexes.splice(sI + 1, sI + 1 - i, index);
     }
-
-    // newItems = [
-    //     start.slice(0, sOffset) if non-empty,
-    //     item,
-    //     end.slice(eOffset) if non-empty
-    // ]
-    const newItems: (I | number)[] = [];
-    this.appendItemSlice(newItems, sI, 0, sOffset);
-    this.appendItem(newItems, item, isPresent);
-    this.appendItemSlice(newItems, eI, eOffset);
-
-    // Also append the trailing kept items (> eI).
-    // After the first (which is nontrivial b/c eI + 1 > 0),
-    // we can just append - already alternates.
-    if (eI + 1 < this.state.length) {
-      this.appendItem(newItems, this.state[eI + 1], eI % 2 === 1);
-    }
-    for (let i = eI + 2; i < this.state.length; i++) {
-      newItems.push(this.state[i]);
-    }
-
-    // Delete replaced & trailing items.
-    this.state.splice(sI);
-
-    // Append new and trailing items.
-    // After the second (which is nontrivial),
-    // we can just append - already alternates.
-    this.appendPresent(this.state, newItems[0] as I);
-    if (1 < newItems.length) {
-      this.appendDeleted(this.state, newItems[1] as number);
-    }
-    for (let j = 2; j < newItems.length; j++) {
-      this.state.push(newItems[j]);
-    }
-
-    return this.construct(replacedItems, count);
+    return this.construct(replacedIndexes, replacedSegments, count);
   }
 
   /**
-   * Returns [i, offset] s.t. this.state[i][offset] (or deleted equivalent)
-   * corresponds to index = indexDiff + (index at input [i, offset]).
+   * Returns info about the segment whose present or deleted region contains index.
+   * - i: The segment's index.
+   * - offset: index - (segment start index).
    *
-   * If out of bounds, returns [-1, this.length - index].
-   * (When includeEnds is true, index = this.length is in-bounds.)
+   * If index is before any segments, returns [-1, index].
    *
-   * @param includeEnds If true and the index is at the start of an item,
-   * returns [previous item index, previous item length] instead of
-   * [item, 0].
+   * @param includeEnds If index is at the start of a segment, whether to instead
+   * return the previous segment's index.
+   * In this case, offset is always nonzero, unless index = -1.
    */
-  protected locate(
-    indexDiff: number,
-    includeEnds = false,
-    i = 0,
-    offset = 0
-  ): [i: number, offset: number] {
-    // Reset remaining to the start of index i.
-    let remaining = indexDiff + offset;
-
-    for (; i < this.state.length; i++) {
-      const itemLength =
-        i % 2 === 0
-          ? this.itemLength(this.state[i] as I)
-          : (this.state[i] as number);
-      if (remaining < itemLength || (includeEnds && remaining === itemLength)) {
-        return [i, remaining];
-      }
-      remaining -= itemLength;
-    }
-
-    return [-1, remaining];
-  }
-
-  private appendItem(
-    arr: (I | number)[],
-    item: I | number,
-    isPresent: boolean
-  ): void {
-    if (isPresent) this.appendPresent(arr, item as I);
-    else this.appendDeleted(arr, item as number);
-  }
-
-  /**
-   * Appends this.state[index].slice(start, end) to items, preserving items's
-   * SparseArray format.
-   */
-  private appendItemSlice(
-    items: (I | number)[],
+  protected getSegment(
     index: number,
-    start: number,
-    end?: number
-  ): void {
-    if (index % 2 === 0) {
-      this.appendPresent(
-        items,
-        this.itemSlice(this.state[index] as I, start, end)
-      );
-    } else
-      this.appendDeleted(items, (end ?? (this.state[index] as number)) - start);
-  }
-
-  private appendPresent(arr: (I | number)[], present: I): void {
-    // OPT: Enforce non-zero length, so we can skip this check.
-    if (this.itemLength(present) === 0) return;
-    if (arr.length % 2 === 0) {
-      // Empty, or ends with deleted item.
-      arr.push(present);
-    } else {
-      // Non-empty and ends with present item.
-      arr[arr.length - 1] = this.itemMerge(arr[arr.length - 1] as I, present);
+    includeEnds: boolean
+  ): [i: number, offset: number] {
+    // OPT: binary search in long lists?
+    // OPT: test forward (w/ append special case) vs backward.
+    // OPT: starting i hint?
+    for (let i = this.indexes.length - 1; i >= 0; i--) {
+      const segIndex = this.indexes[i];
+      if (segIndex < index || (!includeEnds && segIndex === index)) {
+        return [i, index - segIndex];
+      }
     }
-  }
-
-  private appendDeleted(arr: (I | number)[], deleted: number): void {
-    if (deleted === 0) return;
-    if (arr.length % 2 === 1) {
-      // Non-empty and ends with present item.
-      arr.push(deleted);
-    } else if (arr.length === 0) {
-      // Empty.
-      arr.push(this.itemNewEmpty(), deleted);
-    } else {
-      // Non-empty and ends with deleted item.
-      (arr[arr.length - 1] as number) += deleted;
-    }
+    return [-1, index];
   }
 }

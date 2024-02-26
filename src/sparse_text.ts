@@ -2,80 +2,87 @@ import { SparseItems } from "./sparse_items";
 
 export class SparseText extends SparseItems<string> {
   static empty(length = 0): SparseText {
-    if (length === 0) return new this([], 0);
-    else return new this(["", length], length);
+    return new this([], [], length);
   }
 
-  static fromUnsafe(state: (string | number)[]): SparseText {
-    let length = 0;
-    for (let i = 0; i < state.length; i++) {
-      if (i % 2 === 0) length += (state[i] as string).length;
-      else length += state[i] as number;
-    }
-    return new this(state, length);
-  }
+  // static fromUnsafe(state: (string | number)[]): SparseText {
+  //   let length = 0;
+  //   for (let i = 0; i < state.length; i++) {
+  //     if (i % 2 === 0) length += (state[i] as string).length;
+  //     else length += state[i] as number;
+  //   }
+  //   return new this(state, length);
+  // }
 
-  static from(state: (string | number)[]): SparseText {
-    // Defensive deep copy.
-    // TODO: also correctness checks?
-    return this.fromUnsafe(state.slice());
-  }
+  // static from(state: (string | number)[]): SparseText {
+  //   // Defensive deep copy.
+  //   // TODO: also correctness checks?
+  //   return this.fromUnsafe(state.slice());
+  // }
 
-  // TODO: clone? / from(SparseText)? Can reuse length.
+  // // TODO: clone? / from(SparseText)? Can reuse length.
 
-  /**
-   *
-   * @param entries Must be in order by index.
-   * @param length If specified, will be padded to the given length, which
-   * must exceed the last present index.
-   */
-  static fromEntries(
-    entries: Iterable<[index: number, char: string]>,
-    length?: number
-  ): SparseText {
-    // Last item is always present.
-    const state: (string | number)[] = [""];
-    // The current length of state.
-    let curLength = 0;
+  // /**
+  //  *
+  //  * @param entries Must be in order by index.
+  //  * @param length If specified, will be padded to the given length, which
+  //  * must exceed the last present index.
+  //  */
+  // static fromEntries(
+  //   entries: Iterable<[index: number, char: string]>,
+  //   length?: number
+  // ): SparseText {
+  //   // Last item is always present.
+  //   const state: (string | number)[] = [""];
+  //   // The current length of state.
+  //   let curLength = 0;
 
-    for (const [index, char] of entries) {
-      if (index === curLength) {
-        (state[state.length - 1] as string) += char;
-      } else if (index > curLength) {
-        state.push(index - curLength, char);
-      } else {
-        throw new Error(
-          `Out-of-order index in entries: ${index}, previous was ${
-            curLength - 1
-          }`
-        );
-      }
-      curLength = index + 1;
-    }
+  //   for (const [index, char] of entries) {
+  //     if (index === curLength) {
+  //       (state[state.length - 1] as string) += char;
+  //     } else if (index > curLength) {
+  //       state.push(index - curLength, char);
+  //     } else {
+  //       throw new Error(
+  //         `Out-of-order index in entries: ${index}, previous was ${
+  //           curLength - 1
+  //         }`
+  //       );
+  //     }
+  //     curLength = index + 1;
+  //   }
 
-    if (length !== undefined) {
-      if (length < curLength) {
-        throw new Error(
-          `length is less than (max index + 1): ${length} < ${curLength}`
-        );
-      }
-      if (length > curLength) state.push(length - curLength);
-      return new this(state, length);
-    } else {
-      if (curLength === 0) {
-        // Completely empty; use [] instead of state = [""].
-        return new this([], 0);
-      } else return new this(state, curLength);
-    }
-  }
+  //   if (length !== undefined) {
+  //     if (length < curLength) {
+  //       throw new Error(
+  //         `length is less than (max index + 1): ${length} < ${curLength}`
+  //       );
+  //     }
+  //     if (length > curLength) state.push(length - curLength);
+  //     return new this(state, length);
+  //   } else {
+  //     if (curLength === 0) {
+  //       // Completely empty; use [] instead of state = [""].
+  //       return new this([], 0);
+  //     } else return new this(state, curLength);
+  //   }
+  // }
 
   hasGet(index: number): [has: boolean, get: string | undefined] {
     if (index < 0) throw new Error(`Invalid index: ${index}`);
 
-    const [i, offset] = this.locate(index);
-    if (i % 2 === 0) {
-      return [true, (this.state[i] as string)[offset]];
-    } else return [false, undefined];
+    // TODO: deduplicate with other classes.
+    // OPT: binary search in long lists?
+    // OPT: test forward vs backward.
+    for (let i = 0; i < this.indexes.length; i++) {
+      const segIndex = this.indexes[i];
+      if (index < segIndex) return [false, undefined];
+      const segment = this.segments[i];
+      if (index < segIndex + segment.length) {
+        return [true, segment[index - segIndex]];
+      }
+    }
+    return [false, undefined];
   }
 
   has(index: number): boolean {
@@ -86,18 +93,18 @@ export class SparseText extends SparseItems<string> {
     return this.hasGet(index)[1];
   }
 
-  *entries(): IterableIterator<[index: number, char: string]> {
-    let index = 0;
-    for (let i = 0; i < this.state.length; i++) {
-      if (i % 2 === 0) {
-        const present = this.state[i] as string;
-        for (const value of present) {
-          yield [index, value];
-          index++;
-        }
-      } else index += this.state[i] as number;
-    }
-  }
+  // *entries(): IterableIterator<[index: number, char: string]> {
+  //   let index = 0;
+  //   for (let i = 0; i < this.state.length; i++) {
+  //     if (i % 2 === 0) {
+  //       const present = this.state[i] as string;
+  //       for (const value of present) {
+  //         yield [index, value];
+  //         index++;
+  //       }
+  //     } else index += this.state[i] as number;
+  //   }
+  // }
 
   /**
    *
@@ -107,7 +114,7 @@ export class SparseText extends SparseItems<string> {
    * to our index, and whose length is values.length (untrimmed).
    */
   set(index: number, chars: string): SparseText {
-    return this.setOrDelete(index, chars, true);
+    return this._set(index, chars);
   }
 
   /**
@@ -118,12 +125,15 @@ export class SparseText extends SparseItems<string> {
    * to our index, and whose length is count (untrimmed).
    */
   delete(index: number, count = 1): SparseText {
-    // TODO: count >= 0 check?
-    return this.setOrDelete(index, count, false);
+    return this._delete(index, count);
   }
 
-  protected construct(state: (number | string)[], length: number): this {
-    return new SparseText(state, length) as this;
+  protected construct(
+    indexes: number[],
+    segments: string[],
+    length: number
+  ): this {
+    return new SparseText(indexes, segments, length) as this;
   }
 
   protected itemNewEmpty(): string {
