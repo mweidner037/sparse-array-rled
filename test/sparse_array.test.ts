@@ -7,10 +7,14 @@ const DEBUG = false;
 
 function getState<T>(arr: SparseArray<T>): {
   indexes: number[];
-  segments: T[];
+  segments: T[][];
 } {
   // @ts-expect-error Ignore protected
-  return { indexes: arr.indexes, segments: arr.segments };
+  const { normalItem, indexes, segments } = arr;
+  if (normalItem !== null) {
+    if (normalItem.length === 0) return { indexes: [], segments: [] };
+    else return { indexes: [0], segments: [normalItem] };
+  } else return { indexes, segments };
 }
 
 function validate({
@@ -18,7 +22,7 @@ function validate({
   segments,
 }: {
   indexes: number[];
-  segments: string[];
+  segments: string[][];
 }): void {
   // No nonsense i's.
   assert.doesNotHaveAnyKeys(indexes, ["-1"]);
@@ -47,7 +51,7 @@ function getLength({
   segments,
 }: {
   indexes: number[];
-  segments: string[];
+  segments: string[][];
 }): number {
   if (indexes.length === 0) return 0;
   return indexes.at(-1)! + segments.at(-1)!.length;

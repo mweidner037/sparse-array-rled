@@ -10,15 +10,45 @@ export abstract class SparseItems<I> {
   // indexes and segments are in parallel: always matching lengths, possibly 0.
   protected readonly indexes: number[];
   protected readonly segments: I[];
+
+  /**
+   * If all ops so far are compatible with a normal item, it's stored here,
+   * instead of using indexes/segments. Else null.
+   * TODO: Means I cannot contain null (okay).
+   */
+  protected normalItem: I | null;
   /**
    * Subclasses: don't mutate.
    */
   protected _length: number;
 
   protected constructor(indexes: number[], segments: I[], length: number) {
-    this.indexes = indexes;
-    this.segments = segments;
+    if (indexes.length === 0) {
+      this.normalItem = this.itemNewEmpty();
+      // OPT: null instead?
+      this.indexes = [];
+      this.segments = [];
+    } else if (indexes.length === 1 && indexes[0] === 0) {
+      this.normalItem = segments[0];
+      // OPT: null instead?
+      this.indexes = [];
+      this.segments = [];
+    } else {
+      this.normalItem = null;
+      this.indexes = indexes;
+      this.segments = segments;
+    }
     this._length = length;
+  }
+
+  private promoteNormalItem() {
+    if (this.normalItem !== null) {
+      if (this.itemLength(this.normalItem) !== 0) {
+        this.segments.push(this.normalItem);
+        this.indexes.push(0);
+      }
+      this.normalItem = null;
+    }
   }
 
   protected abstract construct(
@@ -28,8 +58,7 @@ export abstract class SparseItems<I> {
   ): this;
 
   protected constructEmpty(length = 0): this {
-    if (length === 0) return this.construct([], [], 0);
-    else return this.construct([length], [this.itemNewEmpty()], length);
+    return this.construct([], [], length);
   }
 
   // TODO: delete unused abstract methods
@@ -69,6 +98,8 @@ export abstract class SparseItems<I> {
   }
 
   size(): number {
+    if (this.normalItem !== null) return this.itemLength(this.normalItem);
+
     let size = 0;
     for (const segment of this.segments) {
       size += this.itemLength(segment);
@@ -77,6 +108,8 @@ export abstract class SparseItems<I> {
   }
 
   isEmpty(): boolean {
+    if (this.normalItem !== null) return this.itemLength(this.normalItem) === 0;
+
     return (
       this.segments.length === 0 ||
       (this.segments.length === 1 && this.itemLength(this.segments[0]) === 0)
@@ -102,6 +135,25 @@ export abstract class SparseItems<I> {
 
     // Avoid trivial-item edge case.
     if (count === 0) return this.constructEmpty();
+
+    if (this.normalItem !== null) {
+      const normalLen = this.itemLength(this.normalItem);
+      // To remain normal, the deletion must not delete a head-only section.
+      if (index + count >= normalLen) {
+        let replaced: this;
+        if (index < normalLen) {
+          replaced = this.construct(
+            [0],
+            [this.itemSlice(this.normalItem, index)],
+            count
+          );
+        } else replaced = this.constructEmpty(count);
+        if (index < normalLen) {
+          this.normalItem = this.itemShorten(this.normalItem, index);
+        }
+        return replaced;
+      } else this.promoteNormalItem();
+    }
 
     const replacedSegments: I[] = [];
     const replacedIndexes: number[] = [];
@@ -183,6 +235,23 @@ export abstract class SparseItems<I> {
 
     // Avoid trivial-item edge case.
     if (count === 0) return this.constructEmpty();
+
+    if (this.normalItem !== null) {
+      const normalLen = this.itemLength(this.normalItem);
+      // To remain normal, the set section must be after a gap.
+      if (index <= normalLen) {
+        let replaced: this;
+        if (index < normalLen) {
+          replaced = this.construct(
+            [0],
+            [this.itemSlice(this.normalItem, index, index + count)],
+            count
+          );
+        } else replaced = this.constructEmpty(count);
+        this.normalItem = this.itemUpdate(this.normalItem, index, item);
+        return replaced;
+      } else this.promoteNormalItem();
+    }
 
     // Optimize common case: append.
     if (this.indexes.length === 0) {
@@ -303,6 +372,8 @@ export abstract class SparseItems<I> {
    * Returns info about the segment whose present or deleted region contains index.
    * - i: The segment's index.
    * - offset: index - (segment start index).
+   *
+   * Only valid when normalItem is null.
    *
    * If index is before any segments, returns [-1, index].
    *

@@ -68,6 +68,10 @@ export class SparseIndexes extends SparseItems<number> {
     if (index < 0) throw new Error(`Invalid index: ${index}`);
 
     // TODO: deduplicate with other classes.
+    if (this.normalItem !== null) {
+      return index < this.normalItem;
+    }
+
     // OPT: binary search in long lists?
     // OPT: test forward vs backward.
     for (let i = 0; i < this.indexes.length; i++) {

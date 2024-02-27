@@ -79,6 +79,11 @@ export class SparseArray<T> extends SparseItems<T[]> {
     if (index < 0) throw new Error(`Invalid index: ${index}`);
 
     // TODO: deduplicate with other classes.
+    if (this.normalItem !== null) {
+      if (index < this.normalItem.length) return [true, this.normalItem[index]];
+      else return [false, undefined];
+    }
+    
     // OPT: binary search in long lists?
     // OPT: test forward vs backward.
     for (let i = 0; i < this.indexes.length; i++) {
