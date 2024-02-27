@@ -130,7 +130,10 @@ export class SparseArray<T> extends SparseItems<T[]> {
    */
   delete(index: number, count = 1): SparseArray<T> {
     // TODO: count >= 0 check?
-    return this.setOrDelete(index, count, false);
+    const ret = this.setOrDelete(index, count, false);
+    // TODO: remove (just a hack for benchmarks)
+    this.trim();
+    return ret;
   }
 
   protected construct(state: (number | T[])[], length: number): this {
