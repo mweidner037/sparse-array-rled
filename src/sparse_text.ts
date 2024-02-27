@@ -1,8 +1,8 @@
-import { SparseItems } from "./sparse_items";
+import { Pair, SparseItems } from "./sparse_items";
 
 export class SparseText extends SparseItems<string> {
   static empty(length = 0): SparseText {
-    return new this([], [], length);
+    return new this([], length);
   }
 
   // static fromUnsafe(state: (string | number)[]): SparseText {
@@ -79,10 +79,10 @@ export class SparseText extends SparseItems<string> {
 
     // OPT: binary search in long lists?
     // OPT: test forward vs backward.
-    for (let i = 0; i < this.indexes.length; i++) {
-      const segIndex = this.indexes[i];
+    for (let i = 0; i < this.pairs.length; i++) {
+      const segIndex = this.pairs[i].index;
       if (index < segIndex) return [false, undefined];
-      const segment = this.segments[i];
+      const segment = this.pairs[i].item;
       if (index < segIndex + segment.length) {
         return [true, segment[index - segIndex]];
       }
@@ -133,12 +133,8 @@ export class SparseText extends SparseItems<string> {
     return this._delete(index, count);
   }
 
-  protected construct(
-    indexes: number[],
-    segments: string[],
-    length: number
-  ): this {
-    return new SparseText(indexes, segments, length) as this;
+  protected construct(pairs: Pair<string>[], length: number): this {
+    return new SparseText(pairs, length) as this;
   }
 
   protected itemNewEmpty(): string {

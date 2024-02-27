@@ -6,10 +6,14 @@
 // - Parallel arrays should be smaller than array of pair objects.
 // - Omit _length on auto-trimmed arrays?
 
+export interface Pair<I> {
+  index: number;
+  item: I;
+}
+
 export abstract class SparseItems<I> {
-  // indexes and segments are in parallel: always matching lengths, possibly 0.
-  protected indexes!: number[];
-  protected segments!: I[];
+  // TODO: try leaving defined again, now that it's just one [] instead of two.
+  protected pairs!: Pair<I>[];
 
   /**
    * If all ops so far are compatible with a normal item, it's stored here,
@@ -22,15 +26,14 @@ export abstract class SparseItems<I> {
    */
   protected _length: number;
 
-  protected constructor(indexes: number[], segments: I[], length: number) {
-    if (indexes.length === 0) {
+  protected constructor(pairs: Pair<I>[], length: number) {
+    if (pairs.length === 0) {
       this.normalItem = this.itemNewEmpty();
-    } else if (indexes.length === 1 && indexes[0] === 0) {
-      this.normalItem = segments[0];
+    } else if (pairs.length === 1 && pairs[0].index === 0) {
+      this.normalItem = pairs[0].item;
     } else {
       this.normalItem = null;
-      this.indexes = indexes;
-      this.segments = segments;
+      this.pairs = pairs;
     }
     this._length = length;
   }
@@ -38,24 +41,18 @@ export abstract class SparseItems<I> {
   private promoteNormalItem() {
     if (this.normalItem !== null) {
       if (this.itemLength(this.normalItem) !== 0) {
-        this.segments = [this.normalItem];
-        this.indexes = [0];
+        this.pairs = [{ index: 0, item: this.normalItem }];
       } else {
-        this.segments = [];
-        this.indexes = [];
+        this.pairs = [];
       }
       this.normalItem = null;
     }
   }
 
-  protected abstract construct(
-    indexes: number[],
-    segments: I[],
-    length: number
-  ): this;
+  protected abstract construct(pairs: Pair<I>[], length: number): this;
 
   protected constructEmpty(length = 0): this {
-    return this.construct([], [], length);
+    return this.construct([], length);
   }
 
   // TODO: delete unused abstract methods
@@ -98,8 +95,8 @@ export abstract class SparseItems<I> {
     if (this.normalItem !== null) return this.itemLength(this.normalItem);
 
     let size = 0;
-    for (const segment of this.segments) {
-      size += this.itemLength(segment);
+    for (const pair of this.pairs) {
+      size += this.itemLength(pair.item);
     }
     return size;
   }
@@ -107,19 +104,16 @@ export abstract class SparseItems<I> {
   isEmpty(): boolean {
     if (this.normalItem !== null) return this.itemLength(this.normalItem) === 0;
 
-    return (
-      this.segments.length === 0 ||
-      (this.segments.length === 1 && this.itemLength(this.segments[0]) === 0)
-    );
+    return this.pairs.length === 0;
   }
 
   trim(): void {
     if (this.normalItem !== null) return;
-    if (this.indexes.length !== 0) {
-      this._length =
-        this.indexes[this.indexes.length - 1] +
-        this.itemLength(this.segments[this.segments.length - 1]);
-    }
+    this._length =
+      this.pairs.length === 0
+        ? 0
+        : this.pairs[this.pairs.length - 1].index +
+          this.itemLength(this.pairs[this.pairs.length - 1].item);
   }
 
   // TODO: in serializing, use length to infer the last deleted item.
@@ -141,8 +135,7 @@ export abstract class SparseItems<I> {
         let replaced: this;
         if (index < normalLen) {
           replaced = this.construct(
-            [0],
-            [this.itemSlice(this.normalItem, index)],
+            [{ index: 0, item: this.itemSlice(this.normalItem, index) }],
             count
           );
         } else replaced = this.constructEmpty(count);
@@ -153,34 +146,37 @@ export abstract class SparseItems<I> {
       } else this.promoteNormalItem();
     }
 
-    const replacedSegments: I[] = [];
-    const replacedIndexes: number[] = [];
+    const replacedPairs: Pair<I>[] = [];
 
     const [sI, sOffset] = this.getSegment(index, true);
     if (sI !== -1) {
-      const start = this.segments[sI];
-      const sLength = this.itemLength(start);
+      const start = this.pairs[sI];
+      const sLength = this.itemLength(start.item);
       if (sOffset < sLength) {
         // Part of start is deleted.
         // Since sOffset > 0, not all of it is deleted.
         if (sOffset + count <= sLength) {
           // A middle section of start is deleted, and the deletions end within start.
           // Shorten the existing segment and (if needed) add a new one for the tail.
-          const sMid = this.itemSlice(start, sOffset, sOffset + count);
+          const sMid = this.itemSlice(start.item, sOffset, sOffset + count);
           if (sOffset + count < sLength) {
-            const sTail = this.itemSlice(start, sOffset + count);
-            this.segments.splice(sI + 1, 0, sTail);
-            this.indexes.splice(sI + 1, 0, this.indexes[sI] + sOffset + count);
+            const sTail = this.itemSlice(start.item, sOffset + count);
+            this.pairs.splice(sI + 1, 0, {
+              index: start.index + sOffset + count,
+              item: sTail,
+            });
           }
-          this.segments[sI] = this.itemShorten(start, sOffset);
+          start.item = this.itemShorten(start.item, sOffset);
 
-          return this.construct([0], [sMid], count);
+          return this.construct([{ index: 0, item: sMid }], count);
         } else {
           // The tail of start is deleted, and later segments may also be affected.
-          replacedSegments.push(this.itemSlice(start, sOffset));
-          replacedIndexes.push(0);
+          replacedPairs.push({
+            index: 0,
+            item: this.itemSlice(start.item, sOffset),
+          });
           // Shorten the existing segment.
-          this.segments[sI] = this.itemShorten(start, sOffset);
+          start.item = this.itemShorten(start.item, sOffset);
           // Continue since later segments may be affected.
         }
       }
@@ -194,36 +190,35 @@ export abstract class SparseItems<I> {
     // to be spliced out (it's either after the deleted region
     // or fixed in-place by the loop).
     let i = sI + 1;
-    for (; i < this.indexes.length; i++) {
-      const segIndex = this.indexes[i];
+    for (; i < this.pairs.length; i++) {
+      const segIndex = this.pairs[i].index;
       if (index + count <= segIndex) break;
-      const segment = this.segments[i];
+      const segment = this.pairs[i].item;
       const segLength = this.itemLength(segment);
       if (index + count < segIndex + segLength) {
         // The head of segment is deleted, but not all of it.
-        replacedSegments.push(
-          this.itemSlice(segment, 0, index + count - segIndex)
-        );
-        replacedIndexes.push(segIndex - index);
+        replacedPairs.push({
+          index: segIndex - index,
+          item: this.itemSlice(segment, 0, index + count - segIndex),
+        });
         // Fix segment in-place.
-        this.segments[i] = this.itemSlice(segment, index + count - segIndex);
-        this.indexes[i] = index + count;
+        this.pairs[i].index = index + count;
+        this.pairs[i].item = this.itemSlice(segment, index + count - segIndex);
         break;
       } else {
         // All of segment is deleted.
         // Aliasing segment is okay here because we'll splice out our own
         // pointer to it later.
-        replacedSegments.push(segment);
-        replacedIndexes.push(segIndex - index);
+        replacedPairs.push({ index: segIndex - index, item: segment });
       }
     }
 
     // Delete [sI + 1, i).
+    // TODO: try removing if statement now that it's just one splice.
     if (i != sI + 1) {
-      this.segments.splice(sI + 1, i - (sI + 1));
-      this.indexes.splice(sI + 1, i - (sI + 1));
+      this.pairs.splice(sI + 1, i - (sI + 1));
     }
-    return this.construct(replacedIndexes, replacedSegments, count);
+    return this.construct(replacedPairs, count);
   }
 
   protected _set(index: number, item: I): this {
@@ -241,8 +236,12 @@ export abstract class SparseItems<I> {
         let replaced: this;
         if (index < normalLen) {
           replaced = this.construct(
-            [0],
-            [this.itemSlice(this.normalItem, index, index + count)],
+            [
+              {
+                index: 0,
+                item: this.itemSlice(this.normalItem, index, index + count),
+              },
+            ],
             count
           );
         } else replaced = this.constructEmpty(count);
@@ -252,34 +251,27 @@ export abstract class SparseItems<I> {
     }
 
     // Optimize common case: append.
-    if (this.indexes.length === 0) {
-      this.indexes.push(index);
-      this.segments.push(item);
-      return this.construct([], [], count);
+    if (this.pairs.length === 0) {
+      this.pairs.push({ index, item });
+      return this.construct([], count);
     } else {
-      const lastIndex = this.indexes[this.indexes.length - 1];
-      const lastSegment = this.segments[this.indexes.length - 1];
-      const lastLength = this.itemLength(lastSegment);
-      if (lastIndex + lastLength == index) {
-        this.segments[this.indexes.length - 1] = this.itemMerge(
-          lastSegment,
-          item
-        );
-        return this.construct([], [], count);
-      } else if (lastIndex + lastLength < index) {
-        this.indexes.push(index);
-        this.segments.push(item);
-        return this.construct([], [], count);
+      const lastPair = this.pairs[this.pairs.length - 1];
+      const lastLength = this.itemLength(lastPair.item);
+      if (lastPair.index + lastLength == index) {
+        lastPair.item = this.itemMerge(lastPair.item, item);
+        return this.construct([], count);
+      } else if (lastPair.index + lastLength < index) {
+        this.pairs.push({ index, item });
+        return this.construct([], count);
       }
     }
 
-    const replacedSegments: I[] = [];
-    const replacedIndexes: number[] = [];
+    const replacedPairs: Pair<I>[] = [];
 
     const [sI, sOffset] = this.getSegment(index, false);
     let itemAdded = false;
     if (sI !== -1) {
-      const start = this.segments[sI];
+      const start = this.pairs[sI].item;
       const sLength = this.itemLength(start);
       if (sOffset <= sLength) {
         // Part of start is overwritten, and/or start is appended to.
@@ -288,16 +280,18 @@ export abstract class SparseItems<I> {
           // item is contained within start.
           const sMid = this.itemSlice(start, sOffset, sOffset + count);
           // Modify the existing segment in-place.
-          this.segments[sI] = this.itemUpdate(start, sOffset, item);
-          return this.construct([0], [sMid], count);
+          this.pairs[sI].item = this.itemUpdate(start, sOffset, item);
+          return this.construct([{ index: 0, item: sMid }], count);
         } else {
           if (sOffset < sLength) {
             // The tail of start is overwritten.
-            replacedSegments.push(this.itemSlice(start, sOffset));
-            replacedIndexes.push(0);
+            replacedPairs.push({
+              index: 0,
+              item: this.itemSlice(start, sOffset),
+            });
           }
           // Overwrite & append to the existing segment.
-          this.segments[sI] = this.itemUpdate(start, sOffset, item);
+          this.pairs[sI].item = this.itemUpdate(start, sOffset, item);
           // Continue since other segments may be affected.
         }
         itemAdded = true;
@@ -311,20 +305,20 @@ export abstract class SparseItems<I> {
     // At the end of this loop, i will be the first index that does *not* need
     // to be spliced out (it's after the affected region).
     let i = sI + 1;
-    for (; i < this.indexes.length; i++) {
-      const segIndex = this.indexes[i];
+    for (; i < this.pairs.length; i++) {
+      const segIndex = this.pairs[i].index;
       if (index + count < segIndex) break;
-      const segment = this.segments[i];
+      const segment = this.pairs[i].item;
       const segLength = this.itemLength(segment);
       if (index + count < segIndex + segLength) {
         // The head of segment is overwritten, but not all of it.
         // The rest needs to be appended to item's segment.
         let tail: I;
         if (index + count > segIndex) {
-          replacedSegments.push(
-            this.itemSlice(segment, 0, index + count - segIndex)
-          );
-          replacedIndexes.push(segIndex - index);
+          replacedPairs.push({
+            index: segIndex - index,
+            item: this.itemSlice(segment, 0, index + count - segIndex),
+          });
           tail = this.itemSlice(segment, index + count - segIndex);
         } else {
           // Nothing actually overwritten (head is trivial);
@@ -334,7 +328,7 @@ export abstract class SparseItems<I> {
 
         if (itemAdded) {
           // Append non-overwritten tail to start.
-          this.segments[sI] = this.itemMerge(this.segments[sI], tail);
+          this.pairs[sI].item = this.itemMerge(this.pairs[sI].item, tail);
         } else {
           // Append non-overwritten tail to item, which is added later.
           item = this.itemMerge(item, tail);
@@ -347,23 +341,21 @@ export abstract class SparseItems<I> {
         // All of segment is overwritten.
         // Aliasing segment is okay here because we'll splice out our own
         // pointer to it later.
-        replacedSegments.push(segment);
-        replacedIndexes.push(segIndex - index);
+        replacedPairs.push({ index: segIndex - index, item: segment });
       }
     }
 
     // Delete [sI + 1, i).
     if (itemAdded) {
+      // TODO: try removing if statement now that it's just one splice.
       if (i != sI + 1) {
-        this.segments.splice(sI + 1, i - (sI + 1));
-        this.indexes.splice(sI + 1, i - (sI + 1));
+        this.pairs.splice(sI + 1, i - (sI + 1));
       }
     } else {
       // Still need to add item, as a new segment.
-      this.segments.splice(sI + 1, i - (sI + 1), item);
-      this.indexes.splice(sI + 1, i - (sI + 1), index);
+      this.pairs.splice(sI + 1, i - (sI + 1), { item, index });
     }
-    return this.construct(replacedIndexes, replacedSegments, count);
+    return this.construct(replacedPairs, count);
   }
 
   /**
@@ -385,9 +377,8 @@ export abstract class SparseItems<I> {
   ): [i: number, offset: number] {
     // OPT: binary search in long lists?
     // OPT: test forward (w/ append special case) vs backward.
-    // OPT: starting i hint?
-    for (let i = this.indexes.length - 1; i >= 0; i--) {
-      const segIndex = this.indexes[i];
+    for (let i = this.pairs.length - 1; i >= 0; i--) {
+      const segIndex = this.pairs[i].index;
       if (segIndex < index || (!includeEnds && segIndex === index)) {
         return [i, index - segIndex];
       }

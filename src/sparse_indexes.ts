@@ -1,8 +1,8 @@
-import { SparseItems } from "./sparse_items";
+import { Pair, SparseItems } from "./sparse_items";
 
 export class SparseIndexes extends SparseItems<number> {
   static empty(length = 0): SparseIndexes {
-    return new this([], [], length);
+    return new this([], length);
   }
 
   // static fromUnsafe(state: number[]): SparseIndexes {
@@ -74,10 +74,10 @@ export class SparseIndexes extends SparseItems<number> {
 
     // OPT: binary search in long lists?
     // OPT: test forward vs backward.
-    for (let i = 0; i < this.indexes.length; i++) {
-      const segIndex = this.indexes[i];
+    for (let i = 0; i < this.pairs.length; i++) {
+      const segIndex = this.pairs[i].index;
       if (index < segIndex) return false;
-      if (index < segIndex + this.segments[i]) {
+      if (index < segIndex + this.pairs[i].item) {
         return true;
       }
     }
@@ -120,12 +120,8 @@ export class SparseIndexes extends SparseItems<number> {
     return this._delete(index, count);
   }
 
-  protected construct(
-    indexes: number[],
-    segments: number[],
-    length: number
-  ): this {
-    return new SparseIndexes(indexes, segments, length) as this;
+  protected construct(pairs: Pair<number>[], length: number): this {
+    return new SparseIndexes(pairs, length) as this;
   }
 
   protected itemNewEmpty(): number {

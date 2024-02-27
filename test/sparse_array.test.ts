@@ -9,12 +9,18 @@ function getState<T>(arr: SparseArray<T>): {
   indexes: number[];
   segments: T[][];
 } {
+  // TODO: rewrite using actual Pair format.
   // @ts-expect-error Ignore protected
-  const { normalItem, indexes, segments } = arr;
+  const { normalItem, pairs } = arr;
   if (normalItem !== null) {
     if (normalItem.length === 0) return { indexes: [], segments: [] };
     else return { indexes: [0], segments: [normalItem] };
-  } else return { indexes, segments };
+  } else {
+    return {
+      indexes: pairs.map((pair) => pair.index),
+      segments: pairs.map((pair) => pair.item),
+    };
+  }
 }
 
 function validate({
