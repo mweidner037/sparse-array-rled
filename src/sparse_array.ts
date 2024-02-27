@@ -83,7 +83,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
       if (index < this.normalItem.length) return [true, this.normalItem[index]];
       else return [false, undefined];
     }
-    
+
     // OPT: binary search in long lists?
     // OPT: test forward vs backward.
     for (let i = 0; i < this.indexes.length; i++) {
@@ -168,8 +168,10 @@ export class SparseArray<T> extends SparseItems<T[]> {
   }
 
   protected itemUpdate(item: T[], start: number, replace: T[]): T[] {
-    // TODO: if beyond existing length, push instead? See if faster.
-    for (let i = 0; i < replace.length; i++) item[start + i] = replace[i];
+    if (start === item.length) item.push(...replace);
+    else {
+      for (let i = 0; i < replace.length; i++) item[start + i] = replace[i];
+    }
     return item;
   }
 

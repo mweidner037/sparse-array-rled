@@ -8,8 +8,8 @@
 
 export abstract class SparseItems<I> {
   // indexes and segments are in parallel: always matching lengths, possibly 0.
-  protected readonly indexes: number[];
-  protected readonly segments: I[];
+  protected indexes!: number[];
+  protected segments!: I[];
 
   /**
    * If all ops so far are compatible with a normal item, it's stored here,
@@ -25,14 +25,8 @@ export abstract class SparseItems<I> {
   protected constructor(indexes: number[], segments: I[], length: number) {
     if (indexes.length === 0) {
       this.normalItem = this.itemNewEmpty();
-      // OPT: null instead?
-      this.indexes = [];
-      this.segments = [];
     } else if (indexes.length === 1 && indexes[0] === 0) {
       this.normalItem = segments[0];
-      // OPT: null instead?
-      this.indexes = [];
-      this.segments = [];
     } else {
       this.normalItem = null;
       this.indexes = indexes;
@@ -44,8 +38,11 @@ export abstract class SparseItems<I> {
   private promoteNormalItem() {
     if (this.normalItem !== null) {
       if (this.itemLength(this.normalItem) !== 0) {
-        this.segments.push(this.normalItem);
-        this.indexes.push(0);
+        this.segments = [this.normalItem];
+        this.indexes = [0];
+      } else {
+        this.segments = [];
+        this.indexes = [];
       }
       this.normalItem = null;
     }
@@ -117,6 +114,7 @@ export abstract class SparseItems<I> {
   }
 
   trim(): void {
+    if (this.normalItem !== null) return;
     if (this.indexes.length !== 0) {
       this._length =
         this.indexes[this.indexes.length - 1] +

@@ -57,10 +57,17 @@ export const PlainArray2Impl: Implementation = {
   },
   delete(arr: object, index: number, count = 1) {
     const arr2 = arr as unknown[];
+
+    if (index >= arr2.length) return new Array<unknown>(count);
+
     const replaced = arr2.slice(index, index + count);
     replaced.length = count;
-    for (let i = 0; i < count; i++) {
-      delete arr2[index + i];
+    // Add special case for shortening (faster for backspace).
+    if (index + count >= arr2.length) arr2.length = index;
+    else {
+      for (let i = 0; i < count; i++) {
+        delete arr2[index + i];
+      }
     }
     return replaced;
   },
