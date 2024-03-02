@@ -77,11 +77,11 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return this.hasGet(index)[1];
   }
 
-  findPresent(
+  findCount(
     count: number,
     startIndex?: number
   ): [index: number, value: T] | null {
-    const located = this._findPresent(count, startIndex);
+    const located = this._findCount(count, startIndex);
     if (located === null) return null;
     const [index, item, offset] = located;
     return [index, item[offset]];

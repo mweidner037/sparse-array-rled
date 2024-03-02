@@ -122,8 +122,6 @@ export abstract class SparseItems<I> {
     this._length = newLength;
   }
 
-  // TODO: prop/method to get the "present/trimmed length" (last present index + 1)?
-
   count(): number {
     if (this._normalItem !== null) {
       return this.itemer().length(this._normalItem);
@@ -136,6 +134,9 @@ export abstract class SparseItems<I> {
     return count;
   }
 
+  /**
+   * # present values in [startIndex, endIndex).
+   */
   countBetween(startIndex: number, endIndex: number): number {
     if (this._normalItem !== null) {
       const normalItemLength = this.itemer().length(this._normalItem);
@@ -155,6 +156,29 @@ export abstract class SparseItems<I> {
       }
     }
     return count;
+  }
+
+  /**
+   * Returns the count "at" index: c s.t. index is the c-th present value
+   * (or would be if it were present). Equivalently, this is the
+   * number of present values strictly prior to index.
+   *
+   * Also returns whether index is present.
+   *
+   * Invert with findCount.
+   */
+  countAt(index: number): [count: number, has: boolean] {
+    // count "of" index = # present values before index.
+    let count = 0;
+    for (const pair of nonNull(this._pairs)) {
+      if (index < pair.index) break;
+      const itemLength = this.itemer().length(pair.item);
+      if (index < pair.index + itemLength) {
+        return [count + index - pair.index, true];
+      }
+      count += itemLength;
+    }
+    return [count, false];
   }
 
   isEmpty(): boolean {
@@ -177,7 +201,7 @@ export abstract class SparseItems<I> {
     // OPT: binary search in long lists?
     // OPT: test forward vs backward.
     for (const pair of nonNull(this._pairs)) {
-      if (index < pair.index) return null;
+      if (index < pair.index) break;
       if (index < pair.index + this.itemer().length(pair.item)) {
         return [pair.item, index - pair.index];
       }
@@ -189,7 +213,7 @@ export abstract class SparseItems<I> {
     return this._get(index) !== null;
   }
 
-  _findPresent(
+  _findCount(
     count: number,
     startIndex = 0
   ): [index: number, item: I, offset: number] | null {

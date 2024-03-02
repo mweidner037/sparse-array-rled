@@ -187,14 +187,14 @@ class Checker {
   }
 
   /**
-   * Test all findPresentIndex inputs and some newSlicer walks.
+   * Test all findCountIndex inputs and some newSlicer walks.
    *
    * More expensive (O(length^2) ops), so only call occasionally,
    * in "interesting" states.
    */
   testQueries(rng: seedrandom.PRNG) {
     // TODO
-    // // Test findPresentIndex.
+    // // Test findCountIndex.
     // for (let startIndex = 0; startIndex < this.values.length; startIndex++) {
     //   for (let count = 0; ; count++) {
     //     // Find the count-th present value starting at startIndex, in values.
@@ -212,7 +212,7 @@ class Checker {
     //     } else {
     //       // Answer is i.
     //       assert.strictEqual(
-    //         man.findPresentIndex(this.items, startIndex, count),
+    //         man.findCountIndex(this.items, startIndex, count),
     //         i
     //       );
     //     }
@@ -383,7 +383,7 @@ describe("SparseArray", () => {
     // test("first deleted", () => {
     //   // Values [null, "x"].
     //   const [items] = man.set(man.new(), 1, ["x"]);
-    //   assert.strictEqual(man.findPresentIndex(items, 0, 0), 1);
+    //   assert.strictEqual(man.findCountIndex(items, 0, 0), 1);
     // });
   });
 });
