@@ -149,11 +149,7 @@ export class SparseText extends SparseItems<string> {
     return a + b;
   }
 
-  protected itemSlice(
-    item: string,
-    start: number,
-    end?: number | undefined
-  ): string {
+  protected itemSlice(item: string, start?: number, end?: number): string {
     return item.slice(start, end);
   }
 

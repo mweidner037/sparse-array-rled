@@ -6,6 +6,7 @@ import { Pair, SparseItems } from "./sparse_items";
 export type SerializedSparseArray<T> = Array<T[] | number>;
 
 export class SparseArray<T> extends SparseItems<T[]> {
+  // TODO: copy static constructors to other subclasses.
   static new<T>(length = 0): SparseArray<T> {
     return new this([], length);
   }
@@ -67,143 +68,30 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return new this(pairs, length ?? curLength);
   }
 
-  clone(): SparseArray<T> {
-    // Deep copy.
-    if (this.normalItem) {
-      return this.construct(
-        [{ index: 0, item: this.normalItem.slice() }],
-        this.length
-      );
-    }
-
-    const pairsCopy: Pair<T[]>[] = [];
-    for (const pair of this.pairs) {
-      pairsCopy.push({ index: pair.index, item: pair.item.slice() });
-    }
-    return this.construct(pairsCopy, this.length);
-  }
-
-  serialize(): SerializedSparseArray<T> {
-    if (this.length === 0) return [];
-
-    const savedState: SerializedSparseArray<T> = [];
-    if (this.normalItem !== null) {
-      // Maybe [].
-      savedState.push(this.normalItem.slice());
-      if (this.length > this.normalItem.length) {
-        savedState.push(this.length - this.normalItem.length);
-      }
-    } else {
-      if (this.pairs.length === 0) {
-        savedState.push([], this.length);
-      } else {
-        if (this.pairs[0].index !== 0) savedState.push([], this.pairs[0].index);
-        savedState.push(this.pairs[0].item.slice());
-        let lastEnd = this.pairs[0].index + this.pairs[0].item.length;
-        for (let i = 1; i < this.pairs.length; i++) {
-          savedState.push(
-            this.pairs[i].index - lastEnd,
-            this.pairs[i].item.slice()
-          );
-          lastEnd = this.pairs[i].index + this.pairs[i].item.length;
-        }
-        if (this.length > lastEnd) savedState.push(this.length - lastEnd);
-      }
-    }
-    return savedState;
+  // TODO: copy on others for type signature override
+  serialize(trimmed?: boolean): SerializedSparseArray<T> {
+    return super.serialize(trimmed);
   }
 
   hasGet(index: number): [has: true, get: T] | [has: false, get: undefined] {
-    if (index < 0) throw new Error(`Invalid index: ${index}`);
-
-    // TODO: deduplicate with other classes.
-    if (this.normalItem !== null) {
-      if (index < this.normalItem.length) return [true, this.normalItem[index]];
-      else return [false, undefined];
-    }
-
-    // OPT: binary search in long lists?
-    // OPT: test forward vs backward.
-    for (let i = 0; i < this.pairs.length; i++) {
-      const segIndex = this.pairs[i].index;
-      if (index < segIndex) return [false, undefined];
-      const segment = this.pairs[i].item;
-      if (index < segIndex + segment.length) {
-        return [true, segment[index - segIndex]];
-      }
-    }
-    return [false, undefined];
-  }
-
-  has(index: number): boolean {
-    return this.hasGet(index)[0];
+    const located = this._get(index);
+    if (located === null) return [false, undefined];
+    const [item, offset] = located;
+    return [true, item[offset]];
   }
 
   get(index: number): T | undefined {
     return this.hasGet(index)[1];
   }
 
-  count(): number {
-    if (this.normalItem !== null) return this.normalItem.length;
-
-    let count = 0;
-    for (const pair of this.pairs) count += pair.item.length;
-    return count;
-  }
-
-  countBetween(startIndex: number, endIndex: number): number {
-    if (this.normalItem !== null) {
-      return (
-        Math.min(endIndex, this.normalItem.length) -
-        Math.min(startIndex, this.normalItem.length)
-      );
-    }
-
-    let count = 0;
-    for (const pair of this.pairs) {
-      if (pair.index >= endIndex) break;
-      if (pair.index + pair.item.length >= startIndex) {
-        count +=
-          Math.min(endIndex, pair.index + pair.item.length) -
-          Math.max(startIndex, pair.index);
-      }
-    }
-    return count;
-  }
-
   findPresent(
     count: number,
-    startIndex = 0
-  ): [index: number, value: T] | [index: -1, value: undefined] {
-    if (this.normalItem !== null) {
-      const index = startIndex + count;
-      return index < this.normalItem.length
-        ? [index, this.normalItem[index]]
-        : [-1, undefined];
-    }
-
-    let countRemaining = count;
-    let i = 0;
-    for (; i < this.pairs.length; i++) {
-      if (this.pairs[i].index + this.pairs[i].item.length >= startIndex) {
-        // Adjust countRemaining as if startIndex was this.pairs[i].index.
-        countRemaining += Math.max(0, startIndex - this.pairs[i].index);
-        break;
-      }
-    }
-
-    // We pretend that startIndex = this.pairs[i].index.
-    for (; i < this.pairs.length; i++) {
-      const itemLength = this.pairs[i].item.length;
-      if (countRemaining < itemLength) {
-        return [
-          this.pairs[i].index + countRemaining,
-          this.pairs[i].item[countRemaining],
-        ];
-      }
-      countRemaining -= itemLength;
-    }
-    return [-1, undefined];
+    startIndex?: number
+  ): [index: number, value: T] | null {
+    const located = this._findPresent(count, startIndex);
+    if (located === null) return null;
+    const [index, item, offset] = located;
+    return [index, item[offset]];
   }
 
   newSlicer(): Slicer<T> {
@@ -232,10 +120,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
   *keys(): IterableIterator<number> {
     for (const [index] of this.entries()) yield index;
   }
-
-  toString(): string {
-    return JSON.stringify(this.serialize());
-  }
+  
   /**
    *
    * @param index
@@ -275,7 +160,11 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return a;
   }
 
-  protected itemSlice(item: T[], start: number, end?: number | undefined): T[] {
+  protected itemSlice(
+    item: T[],
+    start?: number,
+    end?: number | undefined
+  ): T[] {
     return item.slice(start, end);
   }
 

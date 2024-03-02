@@ -68,7 +68,7 @@ export abstract class SparseItems<I> {
   /**
    * Return a new, unaliased item even if redundant.
    */
-  protected abstract itemSlice(item: I, start: number, end?: number): I;
+  protected abstract itemSlice(item: I, start?: number, end?: number): I;
 
   /**
    * Replace [index, index + replace.length) with replace's values. TODO: might go beyond existing length; should use push instead of overwrite in T[] case.
@@ -99,14 +99,33 @@ export abstract class SparseItems<I> {
     this._length = newLength;
   }
 
-  size(): number {
+  count(): number {
     if (this.normalItem !== null) return this.itemLength(this.normalItem);
 
-    let size = 0;
-    for (const pair of this.pairs) {
-      size += this.itemLength(pair.item);
+    let count = 0;
+    for (const pair of this.pairs) count += this.itemLength(pair.item);
+    return count;
+  }
+
+  countBetween(startIndex: number, endIndex: number): number {
+    if (this.normalItem !== null) {
+      const normalItemLength = this.itemLength(this.normalItem);
+      return (
+        Math.min(endIndex, normalItemLength) -
+        Math.min(startIndex, normalItemLength)
+      );
     }
-    return size;
+
+    let count = 0;
+    for (const pair of this.pairs) {
+      if (pair.index >= endIndex) break;
+      const pairEndIndex = pair.index + this.itemLength(pair.item);
+      if (pairEndIndex >= startIndex) {
+        count +=
+          Math.min(endIndex, pairEndIndex) - Math.max(startIndex, pair.index);
+      }
+    }
+    return count;
   }
 
   isEmpty(): boolean {
@@ -115,18 +134,128 @@ export abstract class SparseItems<I> {
     return this.pairs.length === 0;
   }
 
-  trim(): void {
-    if (this.normalItem !== null) return;
-    this._length =
-      this.pairs.length === 0
-        ? 0
-        : this.pairs[this.pairs.length - 1].index +
-          this.itemLength(this.pairs[this.pairs.length - 1].item);
+  protected _get(index: number): [item: I, offset: number] | null {
+    if (index < 0) throw new Error(`Invalid index: ${index}`);
+
+    if (this.normalItem !== null) {
+      if (index < this.itemLength(this.normalItem)) {
+        return [this.normalItem, index];
+      } else return null;
+    }
+
+    // OPT: binary search in long lists?
+    // OPT: test forward vs backward.
+    for (let i = 0; i < this.pairs.length; i++) {
+      const segIndex = this.pairs[i].index;
+      if (index < segIndex) return null;
+      const segment = this.pairs[i].item;
+      if (index < segIndex + this.itemLength(segment)) {
+        return [segment, index - segIndex];
+      }
+    }
+    return null;
   }
 
-  // TODO: in serializing, use length to infer the last deleted item.
-  // Maybe instead of trim(), just have trimmed option in serializer,
-  // so we can avoid calling trim after each op?
+  has(index: number): boolean {
+    return this._get(index) !== null;
+  }
+
+  _findPresent(
+    count: number,
+    startIndex = 0
+  ): [index: number, item: I, offset: number] | null {
+    if (this.normalItem !== null) {
+      const index = startIndex + count;
+      return index < this.itemLength(this.normalItem)
+        ? [index, this.normalItem, index]
+        : null;
+    }
+
+    let countRemaining = count;
+    let i = 0;
+    for (; i < this.pairs.length; i++) {
+      if (
+        this.pairs[i].index + this.itemLength(this.pairs[i].item) >=
+        startIndex
+      ) {
+        // Adjust countRemaining as if startIndex was this.pairs[i].index.
+        countRemaining += Math.max(0, startIndex - this.pairs[i].index);
+        break;
+      }
+    }
+
+    // We pretend that startIndex = this.pairs[i].index.
+    for (; i < this.pairs.length; i++) {
+      const itemLength = this.itemLength(this.pairs[i].item);
+      if (countRemaining < itemLength) {
+        return [
+          this.pairs[i].index + countRemaining,
+          this.pairs[i].item,
+          countRemaining,
+        ];
+      }
+      countRemaining -= itemLength;
+    }
+    return null;
+  }
+
+  clone(): this {
+    // Deep copy.
+    if (this.normalItem) {
+      return this.construct(
+        [{ index: 0, item: this.itemSlice(this.normalItem) }],
+        this.length
+      );
+    }
+
+    const pairsCopy: Pair<I>[] = [];
+    for (const pair of this.pairs) {
+      pairsCopy.push({ index: pair.index, item: this.itemSlice(pair.item) });
+    }
+    return this.construct(pairsCopy, this.length);
+  }
+
+  // trimmed: if true, omits last deleted item (due to length).
+  serialize(trimmed = false): (I | number)[] {
+    if (this.length === 0) return [];
+
+    const savedState: (I | number)[] = [];
+    if (this.normalItem !== null) {
+      // Maybe [].
+      savedState.push(this.itemSlice(this.normalItem));
+      if (!trimmed) {
+        const extraLength = this.length - this.itemLength(this.normalItem);
+        if (extraLength > 0) {
+          savedState.push(extraLength);
+        }
+      }
+    } else {
+      if (this.pairs.length === 0) {
+        savedState.push(this.itemNewEmpty(), this.length);
+      } else {
+        if (this.pairs[0].index !== 0) {
+          savedState.push(this.itemNewEmpty(), this.pairs[0].index);
+        }
+        savedState.push(this.itemSlice(this.pairs[0].item));
+        let lastEnd = this.pairs[0].index + this.itemLength(this.pairs[0].item);
+        for (let i = 1; i < this.pairs.length; i++) {
+          savedState.push(
+            this.pairs[i].index - lastEnd,
+            this.itemSlice(this.pairs[i].item)
+          );
+          lastEnd = this.pairs[i].index + this.itemLength(this.pairs[i].item);
+        }
+        if (!trimmed && this.length > lastEnd) {
+          savedState.push(this.length - lastEnd);
+        }
+      }
+    }
+    return savedState;
+  }
+
+  toString(): string {
+    return JSON.stringify(this.serialize());
+  }
 
   protected _delete(index: number, count: number): this {
     // TODO: count >= 0 check?

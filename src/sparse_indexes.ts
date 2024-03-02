@@ -136,12 +136,8 @@ export class SparseIndexes extends SparseItems<number> {
     return a + b;
   }
 
-  protected itemSlice(
-    item: number,
-    start: number,
-    end?: number | undefined
-  ): number {
-    return (end ?? item) - start;
+  protected itemSlice(item: number, start?: number, end?: number): number {
+    return (end ?? item) - (start ?? 0);
   }
 
   protected itemUpdate(item: number, index: number, replace: number): number {
