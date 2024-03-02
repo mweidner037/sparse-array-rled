@@ -1,4 +1,36 @@
-import { Pair, SparseItems } from "./sparse_items";
+import { Itemer, Pair, SparseItems } from "./sparse_items";
+
+const arrayItemer: Itemer<unknown[]> = {
+  newEmpty(): unknown[] {
+    return [];
+  },
+
+  length(item: unknown[]): number {
+    return item.length;
+  },
+
+  merge(a: unknown[], b: unknown[]): unknown[] {
+    a.push(...b);
+    return a;
+  },
+
+  slice(item: unknown[], start?: number, end?: number | undefined): unknown[] {
+    return item.slice(start, end);
+  },
+
+  update(item: unknown[], start: number, replace: unknown[]): unknown[] {
+    if (start === item.length) item.push(...replace);
+    else {
+      for (let i = 0; i < replace.length; i++) item[start + i] = replace[i];
+    }
+    return item;
+  },
+
+  shorten(item: unknown[], newLength: number): unknown[] {
+    item.length = newLength;
+    return item;
+  },
+} as const;
 
 /**
  * Run-length encoding. Even indexes are T[], odd indexes are delete counts.
@@ -120,7 +152,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
   *keys(): IterableIterator<number> {
     for (const [index] of this.entries()) yield index;
   }
-  
+
   /**
    *
    * @param index
@@ -147,38 +179,8 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return new SparseArray(pairs, length) as this;
   }
 
-  protected itemNewEmpty(): T[] {
-    return [];
-  }
-
-  protected itemLength(item: T[]): number {
-    return item.length;
-  }
-
-  protected itemMerge(a: T[], b: T[]): T[] {
-    a.push(...b);
-    return a;
-  }
-
-  protected itemSlice(
-    item: T[],
-    start?: number,
-    end?: number | undefined
-  ): T[] {
-    return item.slice(start, end);
-  }
-
-  protected itemUpdate(item: T[], start: number, replace: T[]): T[] {
-    if (start === item.length) item.push(...replace);
-    else {
-      for (let i = 0; i < replace.length; i++) item[start + i] = replace[i];
-    }
-    return item;
-  }
-
-  protected itemShorten(item: T[], newLength: number): T[] {
-    item.length = newLength;
-    return item;
+  protected itemer() {
+    return arrayItemer as Itemer<T[]>;
   }
 }
 

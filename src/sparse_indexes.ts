@@ -1,4 +1,30 @@
-import { Pair, SparseItems } from "./sparse_items";
+import { Itemer, Pair, SparseItems } from "./sparse_items";
+
+const indexesItemer: Itemer<number> = {
+  newEmpty(): number {
+    return 0;
+  },
+
+  length(item: number): number {
+    return item;
+  },
+
+  merge(a: number, b: number): number {
+    return a + b;
+  },
+
+  slice(item: number, start?: number, end?: number): number {
+    return (end ?? item) - (start ?? 0);
+  },
+
+  update(item: number, index: number, replace: number): number {
+    return Math.max(item, index + replace);
+  },
+
+  shorten(item: number, newLength: number): number {
+    return newLength;
+  },
+} as const;
 
 export class SparseIndexes extends SparseItems<number> {
   static empty(length = 0): SparseIndexes {
@@ -124,27 +150,7 @@ export class SparseIndexes extends SparseItems<number> {
     return new SparseIndexes(pairs, length) as this;
   }
 
-  protected itemNewEmpty(): number {
-    return 0;
-  }
-
-  protected itemLength(item: number): number {
-    return item;
-  }
-
-  protected itemMerge(a: number, b: number): number {
-    return a + b;
-  }
-
-  protected itemSlice(item: number, start?: number, end?: number): number {
-    return (end ?? item) - (start ?? 0);
-  }
-
-  protected itemUpdate(item: number, index: number, replace: number): number {
-    return Math.max(item, index + replace);
-  }
-
-  protected itemShorten(item: number, newLength: number): number {
-    return newLength;
+  protected itemer() {
+    return indexesItemer;
   }
 }

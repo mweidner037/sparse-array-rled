@@ -1,4 +1,30 @@
-import { Pair, SparseItems } from "./sparse_items";
+import { Itemer, Pair, SparseItems } from "./sparse_items";
+
+const textItemer: Itemer<string> = {
+  newEmpty(): string {
+    return "";
+  },
+
+  length(item: string): number {
+    return item.length;
+  },
+
+  merge(a: string, b: string): string {
+    return a + b;
+  },
+
+  slice(item: string, start?: number, end?: number): string {
+    return item.slice(start, end);
+  },
+
+  update(item: string, start: number, replace: string): string {
+    return item.slice(0, start) + replace + item.slice(start + replace.length);
+  },
+
+  shorten(item: string, newLength: number): string {
+    return item.slice(0, newLength);
+  },
+} as const;
 
 export class SparseText extends SparseItems<string> {
   static empty(length = 0): SparseText {
@@ -137,27 +163,7 @@ export class SparseText extends SparseItems<string> {
     return new SparseText(pairs, length) as this;
   }
 
-  protected itemNewEmpty(): string {
-    return "";
-  }
-
-  protected itemLength(item: string): number {
-    return item.length;
-  }
-
-  protected itemMerge(a: string, b: string): string {
-    return a + b;
-  }
-
-  protected itemSlice(item: string, start?: number, end?: number): string {
-    return item.slice(start, end);
-  }
-
-  protected itemUpdate(item: string, start: number, replace: string): string {
-    return item.slice(0, start) + replace + item.slice(start + replace.length);
-  }
-
-  protected itemShorten(item: string, newLength: number): string {
-    return item.slice(0, newLength);
+  protected itemer() {
+    return textItemer;
   }
 }
