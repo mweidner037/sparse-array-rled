@@ -1,141 +1,92 @@
-import { Itemer, Pair, SparseItems } from "./sparse_items";
+import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
 
-const textItemer: Itemer<string> = {
-  newEmpty(): string {
-    return "";
-  },
+export type SerializedSparseText = Array<string | number>;
 
-  length(item: string): number {
-    return item.length;
-  },
-
-  merge(a: string, b: string): string {
-    return a + b;
-  },
-
-  slice(item: string, start?: number, end?: number): string {
-    return item.slice(start, end);
-  },
-
-  update(item: string, start: number, replace: string): string {
-    return item.slice(0, start) + replace + item.slice(start + replace.length);
-  },
-
-  shorten(item: string, newLength: number): string {
-    return item.slice(0, newLength);
-  },
-} as const;
+export interface TextSlicer {
+  nextSlice(
+    endIndex: number | null
+  ): IterableIterator<[index: number, chars: string]>;
+}
 
 export class SparseText extends SparseItems<string> {
-  static empty(length = 0): SparseText {
+  static new(length = 0): SparseText {
     return new this([], length);
   }
 
-  // static fromUnsafe(state: (string | number)[]): SparseText {
-  //   let length = 0;
-  //   for (let i = 0; i < state.length; i++) {
-  //     if (i % 2 === 0) length += (state[i] as string).length;
-  //     else length += state[i] as number;
-  //   }
-  //   return new this(state, length);
-  // }
-
-  // static from(state: (string | number)[]): SparseText {
-  //   // Defensive deep copy.
-  //   // TODO: also correctness checks?
-  //   return this.fromUnsafe(state.slice());
-  // }
-
-  // // TODO: clone? / from(SparseText)? Can reuse length.
-
-  // /**
-  //  *
-  //  * @param entries Must be in order by index.
-  //  * @param length If specified, will be padded to the given length, which
-  //  * must exceed the last present index.
-  //  */
-  // static fromEntries(
-  //   entries: Iterable<[index: number, char: string]>,
-  //   length?: number
-  // ): SparseText {
-  //   // Last item is always present.
-  //   const state: (string | number)[] = [""];
-  //   // The current length of state.
-  //   let curLength = 0;
-
-  //   for (const [index, char] of entries) {
-  //     if (index === curLength) {
-  //       (state[state.length - 1] as string) += char;
-  //     } else if (index > curLength) {
-  //       state.push(index - curLength, char);
-  //     } else {
-  //       throw new Error(
-  //         `Out-of-order index in entries: ${index}, previous was ${
-  //           curLength - 1
-  //         }`
-  //       );
-  //     }
-  //     curLength = index + 1;
-  //   }
-
-  //   if (length !== undefined) {
-  //     if (length < curLength) {
-  //       throw new Error(
-  //         `length is less than (max index + 1): ${length} < ${curLength}`
-  //       );
-  //     }
-  //     if (length > curLength) state.push(length - curLength);
-  //     return new this(state, length);
-  //   } else {
-  //     if (curLength === 0) {
-  //       // Completely empty; use [] instead of state = [""].
-  //       return new this([], 0);
-  //     } else return new this(state, curLength);
-  //   }
-  // }
-
-  hasGet(index: number): [has: boolean, get: string | undefined] {
-    if (index < 0) throw new Error(`Invalid index: ${index}`);
-
-    // TODO: deduplicate with other classes.
-    if (this.normalItem !== null) {
-      if (index < this.normalItem.length) return [true, this.normalItem[index]];
-      else return [false, undefined];
-    }
-
-    // OPT: binary search in long lists?
-    // OPT: test forward vs backward.
-    for (let i = 0; i < this.pairs.length; i++) {
-      const segIndex = this.pairs[i].index;
-      if (index < segIndex) return [false, undefined];
-      const segment = this.pairs[i].item;
-      if (index < segIndex + segment.length) {
-        return [true, segment[index - segIndex]];
-      }
-    }
-    return [false, undefined];
+  static deserialize(serialized: SerializedSparseText): SparseText {
+    return new this(...deserializeItems(serialized, textItemer));
   }
 
-  has(index: number): boolean {
-    return this.hasGet(index)[0];
+  static fromEntries(
+    entries: Iterable<[index: number, char: string]>,
+    length?: number
+  ): SparseText {
+    const pairs: Pair<string>[] = [];
+    let curLength = 0;
+
+    for (const [index, char] of entries) {
+      if (index < curLength) {
+        throw new Error(
+          `Out-of-order index in entries: ${index}, previous was ${
+            curLength - 1
+          }`
+        );
+      }
+
+      if (index === curLength && pairs.length !== 0) {
+        pairs[pairs.length - 1].item += char;
+      } else {
+        pairs.push({ index, item: char });
+      }
+      curLength = index + 1;
+    }
+
+    if (length !== undefined && length < curLength) {
+      throw new Error(
+        `length is less than (max index + 1): ${length} < ${curLength}`
+      );
+    }
+    return new this(pairs, length ?? curLength);
+  }
+
+  serialize(trimmed?: boolean): SerializedSparseText {
+    return super.serialize(trimmed);
+  }
+
+  hasGet(
+    index: number
+  ): [has: true, get: string] | [has: false, get: undefined] {
+    const located = this._get(index);
+    if (located === null) return [false, undefined];
+    const [item, offset] = located;
+    return [true, item[offset]];
   }
 
   get(index: number): string | undefined {
     return this.hasGet(index)[1];
   }
 
-  // *entries(): IterableIterator<[index: number, char: string]> {
-  //   let index = 0;
-  //   for (let i = 0; i < this.state.length; i++) {
-  //     if (i % 2 === 0) {
-  //       const present = this.state[i] as string;
-  //       for (const value of present) {
-  //         yield [index, value];
-  //         index++;
-  //       }
-  //     } else index += this.state[i] as number;
-  //   }
-  // }
+  findCount(
+    count: number,
+    startIndex?: number
+  ): [index: number, char: string] | null {
+    const located = this._findCount(count, startIndex);
+    if (located === null) return null;
+    const [index, item, offset] = located;
+    return [index, item[offset]];
+  }
+
+  newSlicer(): TextSlicer {
+    return super.newSlicer();
+  }
+
+  *entries(): IterableIterator<[index: number, char: string]> {
+    for (const pair of this.asPairs()) {
+      for (let j = 0; j < pair.item.length; j++) {
+        yield [pair.index + j, pair.item[j]];
+      }
+    }
+  }
 
   /**
    *
@@ -167,3 +118,29 @@ export class SparseText extends SparseItems<string> {
     return textItemer;
   }
 }
+
+const textItemer: Itemer<string> = {
+  newEmpty(): string {
+    return "";
+  },
+
+  length(item: string): number {
+    return item.length;
+  },
+
+  merge(a: string, b: string): string {
+    return a + b;
+  },
+
+  slice(item: string, start?: number, end?: number): string {
+    return item.slice(start, end);
+  },
+
+  update(item: string, start: number, replace: string): string {
+    return item.slice(0, start) + replace + item.slice(start + replace.length);
+  },
+
+  shorten(item: string, newLength: number): string {
+    return item.slice(0, newLength);
+  },
+} as const;

@@ -57,6 +57,7 @@ export interface ItemSlicer<I> {
 // - Don't set _pairs until forced (hidden class change).
 
 // Note: I cannot contain null.
+// Iteration vs mutation generally unsafe.
 export abstract class SparseItems<I> {
   // The internal state is either:
   // - `pairs: Pair<I>[], normalItem: null`: Default.
@@ -250,6 +251,13 @@ export abstract class SparseItems<I> {
   newSlicer(): ItemSlicer<I> {
     return new PairSlicer(this.itemer(), this.asPairs());
   }
+
+  // *items(): IterableIterator<[index: number, item: I]> {
+  //   for (const pair of this.asPairs()) {
+  //     // Always slice, to prevent exposing internal items.
+  //     yield [pair.index, this.itemer().slice(pair.item)];
+  //   }
+  // }
 
   *keys(): IterableIterator<number> {
     for (const pair of this.asPairs()) {
@@ -587,6 +595,10 @@ class PairSlicer<I> implements ItemSlicer<I> {
     private readonly pairs: readonly Pair<I>[]
   ) {}
 
+  /**
+   * Must consume entire previous slice before calling again.
+   * (TODO: Use array return value to prevent this concern?)
+   */
   *nextSlice(
     endIndex: number | null
   ): IterableIterator<[index: number, item: I]> {
