@@ -12,11 +12,12 @@ export interface ArraySlicer<T> {
 }
 
 export class SparseArray<T> extends SparseItems<T[]> {
-  // TODO: copy static constructors to other subclasses.
   static new<T>(length = 0): SparseArray<T> {
     return new this([], length);
   }
 
+  // OPT: unsafe version that skips internal clones?
+  // For faster loading direct from JSON (w/o storing refs elsewhere).
   static deserialize<T>(serialized: SerializedSparseArray<T>): SparseArray<T> {
     return new this(
       ...deserializeItems(serialized, arrayItemer as Itemer<T[]>)
@@ -61,7 +62,6 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return new this(pairs, length ?? curLength);
   }
 
-  // TODO: copy on others for type signature override
   serialize(trimmed?: boolean): SerializedSparseArray<T> {
     return super.serialize(trimmed);
   }
@@ -92,24 +92,11 @@ export class SparseArray<T> extends SparseItems<T[]> {
   }
 
   *entries(): IterableIterator<[index: number, value: T]> {
-    // TODO: expose pairs getter to make this easier, which auto-wraps normalItem for readonly queries?
-    if (this.normalItem !== null) {
-      for (let index = 0; index < this.normalItem.length; index++) {
-        yield [index, this.normalItem[index]];
-      }
-      return;
-    }
-
-    for (const pair of this.pairs) {
+    for (const pair of this.asPairs()) {
       for (let j = 0; j < pair.item.length; j++) {
         yield [pair.index + j, pair.item[j]];
       }
     }
-  }
-
-  // TODO: superclass method? Since common like has().
-  *keys(): IterableIterator<number> {
-    for (const [index] of this.entries()) yield index;
   }
 
   /**

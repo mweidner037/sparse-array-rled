@@ -18,6 +18,7 @@ export interface Itemer<I> {
   newEmpty(): I;
 
   length(item: I): number;
+
   /**
    * Preferably modify a in-place and return it.
    */
@@ -37,6 +38,8 @@ export interface Itemer<I> {
 
   /**
    * Preferably modify item in-place and return it.
+   *
+   * It is promised that newLength <= item.length (TODO: check).
    */
   shorten(item: I, newLength: number): I;
 }
@@ -49,15 +52,19 @@ export interface ItemSlicer<I> {
   ): IterableIterator<[index: number, item: I]>;
 }
 
+// TODO: measure perf impacts:
+// - switch back to normalItem at end of set/delete, if possible.
+// - Don't set _pairs until forced (hidden class change).
+
 // Note: I cannot contain null.
 export abstract class SparseItems<I> {
   // The internal state is either:
   // - `pairs: Pair<I>[], normalItem: null`: Default.
-  // - `pairs: null, normalItem: I`: Storage-optimized version of a single pair
-  // `{ index: 0, item: this.normalItem }`.
+  // - `pairs: null, normalItem: I`: Storage-optimized version of zero pairs or
+  // a single pair `{ index: 0, item: this.normalItem }`.
   //
   // This may switch between the two states at will.
-  // Use `getPairs()` and `forcePairs()` to be shielded from the details.
+  // Use `asPairs()` and `forcePairs()` to be shielded from the details.
   private _pairs: Pair<I>[] | null = null;
   private _normalItem: I | null = null;
 
@@ -220,16 +227,23 @@ export abstract class SparseItems<I> {
     return new PairSlicer(this.itemer(), this.asPairs());
   }
 
+  *keys(): IterableIterator<number> {
+    for (const pair of this.asPairs()) {
+      for (let j = 0; j < this.itemer().length(pair.item); j++) {
+        yield pair.index + j;
+      }
+    }
+  }
+
   clone(): this {
     // Deep copy.
-    const pairsCopy: Pair<I>[] = [];
-    for (const pair of this.asPairs()) {
-      pairsCopy.push({
+    return this.construct(
+      this.asPairs().map((pair) => ({
         index: pair.index,
         item: this.itemer().slice(pair.item),
-      });
-    }
-    return this.construct(pairsCopy, this.length);
+      })),
+      this.length
+    );
   }
 
   // trimmed: if true, omits last deleted item (due to length).
