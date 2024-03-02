@@ -74,13 +74,20 @@ export abstract class SparseItems<I> {
     this._length = length;
   }
 
+  protected abstract construct(pairs: Pair<I>[], length: number): this;
+
+  // Return a constant copy stored outside the prototype, to avoid storing
+  // a new ref per object.
+  protected abstract itemer(): Itemer<I>;
+
   /**
    * Returns a *read-only* (unsafe to mutate) copy of this's state as Pair<I>[],
    * hiding whether the current internal state is _pairs or normalItem.
    */
   protected asPairs(): readonly Pair<I>[] {
     if (this._normalItem !== null) {
-      return [{ index: 0, item: this._normalItem }];
+      if (this.itemer().length(this._normalItem) === 0) return [];
+      else return [{ index: 0, item: this._normalItem }];
     }
     return nonNull(this._pairs);
   }
@@ -90,19 +97,11 @@ export abstract class SparseItems<I> {
    */
   private forcePairs(): Pair<I>[] {
     if (this._pairs === null) {
-      this._pairs = [{ index: 0, item: nonNull(this._normalItem) }];
+      this._pairs = this.asPairs() as Pair<I>[];
       this._normalItem = null;
     }
     return this._pairs;
   }
-
-  // TODO: use this.constructor hack instead?
-  // Likewise in deserialize().
-  protected abstract construct(pairs: Pair<I>[], length: number): this;
-
-  // Return a constant copy stored outside the prototype, to avoid storing
-  // a new ref per object.
-  protected abstract itemer(): Itemer<I>;
 
   get length(): number {
     return this._length;
@@ -217,15 +216,8 @@ export abstract class SparseItems<I> {
     return null;
   }
 
-  // TODO: go through normalItem special cases and check if warranted.
-
   newSlicer(): ItemSlicer<I> {
-    // TODO: just PairSlicer, using readPairs? Extra case seems unnec for a linear-time op.
-    if (this._normalItem !== null) {
-      return new NormalItemSlicer(this.itemer(), this._normalItem);
-    }
-
-    return new PairSlicer(this.itemer(), nonNull(this._pairs));
+    return new PairSlicer(this.itemer(), this.asPairs());
   }
 
   clone(): this {
@@ -548,44 +540,13 @@ export function deserializeItems<I>(
   return [pairs, nextIndex];
 }
 
-class NormalItemSlicer<I> implements ItemSlicer<I> {
-  private index = 0;
-
-  constructor(
-    private readonly itemer: Itemer<I>,
-    private readonly normalItem: I
-  ) {}
-
-  *nextSlice(
-    endIndex: number | null
-  ): IterableIterator<[index: number, item: I]> {
-    if (endIndex === null) {
-      if (this.index < this.itemer.length(this.normalItem)) {
-        yield [this.index, this.itemer.slice(this.normalItem, this.index)];
-      }
-    } else {
-      const actualEndIndex = Math.min(
-        this.itemer.length(this.normalItem),
-        endIndex
-      );
-      if (this.index < actualEndIndex) {
-        yield [
-          this.index,
-          this.itemer.slice(this.normalItem, this.index, actualEndIndex),
-        ];
-      }
-      this.index = endIndex;
-    }
-  }
-}
-
 class PairSlicer<I> implements ItemSlicer<I> {
   private i = 0;
   private offset = 0;
 
   constructor(
     private readonly itemer: Itemer<I>,
-    private readonly pairs: Pair<I>[]
+    private readonly pairs: readonly Pair<I>[]
   ) {}
 
   *nextSlice(
