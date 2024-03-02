@@ -2,72 +2,49 @@ import { assert } from "chai";
 import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
 import { SparseArray } from "../src";
+import { Pair } from "../src/sparse_items";
 
 const DEBUG = false;
 
-function getState<T>(arr: SparseArray<T>): {
-  indexes: number[];
-  segments: T[][];
-} {
-  // TODO: rewrite using actual Pair format.
+function getState<T>(arr: SparseArray<T>): Pair<T[]>[] {
   // @ts-expect-error Ignore protected
-  const { normalItem, pairs } = arr;
-  if (normalItem !== null) {
-    if (normalItem.length === 0) return { indexes: [], segments: [] };
-    else return { indexes: [0], segments: [normalItem] };
-  } else {
-    return {
-      indexes: pairs.map((pair) => pair.index),
-      segments: pairs.map((pair) => pair.item),
-    };
-  }
+  return arr.asPairs();
 }
 
-function validate({
-  indexes,
-  segments,
-}: {
-  indexes: number[];
-  segments: string[][];
-}): void {
+function validate<T>(pairs: Pair<T[]>[]): void {
   // No nonsense i's.
-  assert.doesNotHaveAnyKeys(indexes, ["-1"]);
-  assert.doesNotHaveAnyKeys(segments, ["-1"]);
+  assert.doesNotHaveAnyKeys(pairs, ["-1", "-2", "-0"]);
 
   // In order.
-  for (let i = 0; i < indexes.length - 1; i++) {
-    assert.isBelow(indexes[i], indexes[i + 1]);
+  for (let i = 0; i < pairs.length - 1; i++) {
+    assert.isBelow(pairs[i].index, pairs[i + 1].index);
+  }
+
+  // Proper types.
+  for (let i = 0; i < pairs.length; i++) {
+    assert.isArray(pairs[i].item);
   }
 
   // No empty items.
-  for (let i = 0; i < segments.length; i++) {
-    assert.notStrictEqual(segments[i].length, 0);
+  for (let i = 0; i < pairs.length; i++) {
+    assert.notStrictEqual(pairs[i].item.length, 0);
   }
 
   // No overlapping or joinable segments.
-  for (let i = 0; i < indexes.length - 1; i++) {
-    const thisEnd = indexes[i] + segments[i].length;
-    const nextStart = indexes[i + 1];
+  for (let i = 0; i < pairs.length - 1; i++) {
+    const thisEnd = pairs[i].index + pairs[i].item.length;
+    const nextStart = pairs[i + 1].index;
     assert.isBelow(thisEnd, nextStart);
   }
 }
 
-function getLength({
-  indexes,
-  segments,
-}: {
-  indexes: number[];
-  segments: string[][];
-}): number {
-  if (indexes.length === 0) return 0;
-  return indexes.at(-1)! + segments.at(-1)!.length;
+function getPresentLength<T>(pairs: Pair<T[]>[]): number {
+  if (pairs.length === 0) return 0;
+  const lastPair = pairs.at(-1)!;
+  return lastPair.index + lastPair.item.length;
 }
 
-function check(
-  arr: SparseArray<string>,
-  values: (string | null)[],
-  trimmed = false
-) {
+function check(arr: SparseArray<string>, values: (string | null)[]) {
   const state = getState(arr);
   validate(state);
 
@@ -80,14 +57,14 @@ function check(
       beforeCount++;
     }
   }
+  assert.strictEqual(arr.length, values.length);
+
   assert.strictEqual(
-    arr.size(),
+    arr.count(),
     values.filter((value) => value != null).length,
-    "size"
+    "count"
   );
-  if (trimmed) {
-    assert.strictEqual(getLength(state), values.length, "length");
-  }
+  assert.isAtLeast(arr.length, getPresentLength(state));
 
   // getInfo should also work on indexes past the length.
   for (let i = 0; i < 10; i++) {
@@ -95,25 +72,35 @@ function check(
   }
 }
 
+function entriesAsItems<T>(
+  entries: Array<[index: number, value: T]>
+): Array<[index: number, item: T[]]> {
+  const pairs: Pair<T[]>[] = [];
+  let curLength = 0;
+
+  for (const [index, value] of entries) {
+    if (index === curLength && pairs.length !== 0) {
+      pairs[pairs.length - 1].item.push(value);
+    } else {
+      pairs.push({ index, item: [value] });
+    }
+    curLength = index + 1;
+  }
+
+  return pairs.map(({ index, item }) => [index, item]);
+}
+
 class Checker {
   readonly arr: SparseArray<string>;
   values: (string | null)[];
 
   constructor() {
-    this.arr = SparseArray.empty();
+    this.arr = SparseArray.new();
     this.values = [];
   }
 
   check() {
     check(this.arr, this.values);
-  }
-
-  trim() {
-    this.arr.trim();
-    while (this.values.length !== 0 && this.values.at(-1) === null) {
-      this.values.pop();
-    }
-    this.check();
   }
 
   set(index: number, newValues: string[]) {
@@ -146,9 +133,6 @@ class Checker {
     this.check();
     check(replaced, replacedValues);
     assert.strictEqual(replaced.length, replacedValues.length);
-
-    // Always trim, to match TODO.
-    this.trim();
   }
 
   delete(index: number, count: number) {
@@ -181,9 +165,6 @@ class Checker {
     this.check();
     check(replaced, replacedValues);
     assert.strictEqual(replaced.length, replacedValues.length);
-
-    // Always trim, to match TODO.
-    this.trim();
   }
 
   /**
@@ -193,48 +174,48 @@ class Checker {
    * in "interesting" states.
    */
   testQueries(rng: seedrandom.PRNG) {
-    // TODO
-    // // Test findCountIndex.
-    // for (let startIndex = 0; startIndex < this.values.length; startIndex++) {
-    //   for (let count = 0; ; count++) {
-    //     // Find the count-th present value starting at startIndex, in values.
-    //     let remaining = count;
-    //     let i = startIndex;
-    //     for (; i < this.values.length; i++) {
-    //       if (this.values[i] !== null) {
-    //         remaining--;
-    //         if (remaining === 0) break;
-    //       }
-    //     }
-    //     if (remaining !== 0) {
-    //       // count is too large; go to the next startIndex.
-    //       break;
-    //     } else {
-    //       // Answer is i.
-    //       assert.strictEqual(
-    //         man.findCountIndex(this.items, startIndex, count),
-    //         i
-    //       );
-    //     }
-    //   }
-    // }
-    // // Test newSlicer 10x with random slices.
-    // for (let trial = 0; trial < 10; trial++) {
-    //   const slicer = man.newSlicer(this.items);
-    //   let lastEnd = 0;
-    //   while (rng() >= 0.75) {
-    //     // Length 0 to 20 (0 can happen w/ concurrent or L/R dual siblings).
-    //     const len = Math.floor(rng() * 21);
-    //     const actual = slicer.nextSlice(lastEnd + len);
-    //     const expected = [...this.values.entries()]
-    //       .slice(lastEnd, lastEnd + len)
-    //       .filter(([, value]) => value != null);
-    //     assert.deepStrictEqual(actual, expected);
-    //     lastEnd += len;
-    //   }
-    //   // Finish.
-    //   slicer.nextSlice(null);
-    // }
+    // Test findCountIndex.
+    for (let startIndex = 0; startIndex < this.values.length; startIndex++) {
+      for (let count = 0; ; count++) {
+        // Find the count-th present value starting at startIndex, in values.
+        let remaining = count;
+        let index = startIndex;
+        for (; index < this.values.length; index++) {
+          if (this.values[index] !== null) {
+            remaining--;
+            if (remaining === 0) break;
+          }
+        }
+        if (index === this.values.length) {
+          // count is too large; go to the next startIndex.
+          break;
+        } else {
+          // Answer is i.
+          assert.strictEqual(this.arr.findCount(startIndex, count), [
+            index,
+            this.values[index],
+          ]);
+        }
+      }
+    }
+    // Test newSlicer 10x with random slices.
+    for (let trial = 0; trial < 10; trial++) {
+      const slicer = this.arr.newSlicer();
+      let lastEnd = 0;
+      while (rng() >= 0.75) {
+        // Length 0 to 20 (0 can happen w/ concurrent or L/R dual siblings).
+        const len = Math.floor(rng() * 21);
+        const actual = [...slicer.nextSlice(lastEnd + len)];
+        const expectedEntries = [...this.values.entries()]
+          .slice(lastEnd, lastEnd + len)
+          .filter(([, value]) => value != null);
+        const expected = entriesAsItems(expectedEntries);
+        assert.deepStrictEqual(actual, expected);
+        lastEnd += len;
+      }
+      // Finish. TODO: check output.
+      slicer.nextSlice(null);
+    }
   }
 }
 
@@ -246,8 +227,8 @@ describe("SparseArray", () => {
   });
 
   test("empty", () => {
-    check(SparseArray.empty(), []);
-    check(SparseArray.empty(3), [null, null, null]);
+    check(SparseArray.new(), []);
+    check(SparseArray.new(3), [null, null, null]);
   });
 
   test("set once", () => {

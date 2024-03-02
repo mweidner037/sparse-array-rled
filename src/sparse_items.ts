@@ -313,7 +313,8 @@ export abstract class SparseItems<I> {
   protected _delete(index: number, count: number): this {
     // TODO: count >= 0 check?
 
-    // TODO: update length.
+    // Update length to "touch" [index, index + count), even if count is 0.
+    this._length = Math.max(this._length, index + count);
 
     // Avoid trivial-item edge case.
     if (count === 0) return this.construct([], 0);
@@ -421,7 +422,8 @@ export abstract class SparseItems<I> {
   protected _set(index: number, item: I): this {
     const count = this.itemer().length(item);
 
-    // TODO: update length.
+    // Update length to "touch" [index, index + count), even if count is 0.
+    this._length = Math.max(this._length, index + count);
 
     // Avoid trivial-item edge case.
     if (count === 0) return this.construct([], 0);
@@ -607,9 +609,9 @@ class PairSlicer<I> implements ItemSlicer<I> {
       if (endIndex !== null && endIndex <= pair.index) return;
       const pairEnd = pair.index + this.itemer.length(pair.item);
       if (endIndex === null || endIndex >= pairEnd) {
-        // Always slice, to prevent exposing internal items.
         yield [
           pair.index + this.offset,
+          // Always slice, to prevent exposing internal items.
           this.itemer.slice(pair.item, this.offset),
         ];
         this.i++;
@@ -624,6 +626,7 @@ class PairSlicer<I> implements ItemSlicer<I> {
           ];
           this.offset = endOffset;
         }
+        return;
       }
     }
   }
