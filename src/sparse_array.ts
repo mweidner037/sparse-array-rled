@@ -3,34 +3,30 @@ import { Pair, SparseItems } from "./sparse_items";
 /**
  * Run-length encoding. Even indexes are T[], odd indexes are delete counts.
  */
-export type SparseArrayState<T> = Array<T[] | number>;
+export type SerializedSparseArray<T> = Array<T[] | number>;
 
 export class SparseArray<T> extends SparseItems<T[]> {
-  static empty<T>(length = 0): SparseArray<T> {
+  static new<T>(length = 0): SparseArray<T> {
     return new this([], length);
   }
 
-  static deserialize<T>(state: SparseArrayState<T>): SparseArray<T> {
+  static deserialize<T>(serialized: SerializedSparseArray<T>): SparseArray<T> {
     const pairs: Pair<T[]>[] = [];
     let nextIndex = 0;
 
-    for (let j = 0; j < state.length; j++) {
+    for (let j = 0; j < serialized.length; j++) {
       if (j % 2 === 0) {
-        const item = state[j] as T[];
+        const item = serialized[j] as T[];
         if (item.length === 0) continue;
         pairs.push({ index: nextIndex, item: item.slice() });
         nextIndex += item.length;
       } else {
-        const deleted = state[j] as number;
+        const deleted = serialized[j] as number;
         nextIndex += deleted;
       }
     }
 
     return new this(pairs, nextIndex);
-  }
-
-  static fromArray<T>(arr: T[]): SparseArray<T> {
-    return new this([{ index: 0, item: arr.slice() }], arr.length);
   }
 
   /**
@@ -87,10 +83,10 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return this.construct(pairsCopy, this.length);
   }
 
-  serialize(): SparseArrayState<T> {
+  serialize(): SerializedSparseArray<T> {
     if (this.length === 0) return [];
 
-    const savedState: SparseArrayState<T> = [];
+    const savedState: SerializedSparseArray<T> = [];
     if (this.normalItem !== null) {
       // Maybe [].
       savedState.push(this.normalItem.slice());
@@ -261,8 +257,6 @@ export class SparseArray<T> extends SparseItems<T[]> {
   delete(index: number, count = 1): SparseArray<T> {
     return this._delete(index, count);
   }
-
-  // TODO: load, save, clone
 
   protected construct(pairs: Pair<T[]>[], length: number): this {
     return new SparseArray(pairs, length) as this;

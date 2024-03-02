@@ -91,6 +91,14 @@ export abstract class SparseItems<I> {
     // );
   }
 
+  // Sim behavior to normal array
+  set length(newLength: number) {
+    if (newLength < this._length) {
+      this._delete(newLength, this._length - newLength);
+    }
+    this._length = newLength;
+  }
+
   size(): number {
     if (this.normalItem !== null) return this.itemLength(this.normalItem);
 
