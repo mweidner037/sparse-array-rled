@@ -10,14 +10,15 @@ import {
   WrapSparseIndexesLike,
   WrapSparseTextLike,
 } from "./wrappers";
+import { WrapOldSparseArrayLike } from "./wrappers_old";
 
 export const allImpls: Implementation[] = [
   WrapSparseArrayLike(SparseArray),
   WrapSparseTextLike(SparseText),
   WrapSparseIndexesLike(SparseIndexes),
-  WrapSparseArrayLike(SparseArrayDirect),
-  WrapSparseArrayLike(SparseArrayPairs, "SparseArrayPairs"),
-  WrapSparseArrayLike(SparseArrayAlternating, "SparseArrayAltern"),
+  WrapOldSparseArrayLike(SparseArrayDirect),
+  WrapOldSparseArrayLike(SparseArrayPairs, "SparseArrayPairs"),
+  WrapOldSparseArrayLike(SparseArrayAlternating, "SparseArrayAltern"),
   PlainArrayImpl,
   PlainArray2Impl,
   ListPositionsImpl,

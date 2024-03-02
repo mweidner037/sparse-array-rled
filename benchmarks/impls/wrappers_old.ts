@@ -3,35 +3,35 @@ import { Implementation } from "../util";
 /**
  * Type of a class that looks like SparseArray.
  */
-export interface SparseArrayLike {
+export interface OldSparseArrayLike {
   isEmpty(): boolean;
-  set(index: number, ...values: unknown[]): SparseArrayLike;
-  delete(index: number, count?: number): SparseArrayLike;
+  set(index: number, ...values: unknown[]): OldSparseArrayLike;
+  delete(index: number, count?: number): OldSparseArrayLike;
 }
 
 /**
  * Given a SparseArray-like class, returns the obvious Implementation.
  */
-export function WrapSparseArrayLike(
+export function WrapOldSparseArrayLike(
   SparseArrayLikeClass: {
     name: string;
-    "new"(): SparseArrayLike;
+    empty(): OldSparseArrayLike;
   },
   name?: string
 ): Implementation {
   return {
     name: name ?? SparseArrayLikeClass.name,
     newEmpty() {
-      return SparseArrayLikeClass.new();
+      return SparseArrayLikeClass.empty();
     },
     isEmpty(arr: object) {
-      return (arr as SparseArrayLike).isEmpty();
+      return (arr as OldSparseArrayLike).isEmpty();
     },
     set(arr: object, index: number, ...values: unknown[]) {
-      return (arr as SparseArrayLike).set(index, ...values);
+      return (arr as OldSparseArrayLike).set(index, ...values);
     },
     delete(arr: object, index: number, count?: number) {
-      return (arr as SparseArrayLike).delete(index, count);
+      return (arr as OldSparseArrayLike).delete(index, count);
     },
   };
 }
@@ -39,32 +39,32 @@ export function WrapSparseArrayLike(
 /**
  * Type of a class that looks like SparseText.
  */
-export interface SparseTextLike {
+export interface OldSparseTextLike {
   isEmpty(): boolean;
-  set(index: number, chars: string): SparseTextLike;
-  delete(index: number, count?: number): SparseTextLike;
+  set(index: number, chars: string): OldSparseTextLike;
+  delete(index: number, count?: number): OldSparseTextLike;
 }
 
 /**
  * Given a SparseArray-like class, returns the obvious Implementation.
  */
-export function WrapSparseTextLike(SparseTextLikeClass: {
+export function WrapOldSparseTextLike(SparseTextLikeClass: {
   name: string;
-  "new"(): SparseTextLike;
+  empty(): OldSparseTextLike;
 }): Implementation {
   return {
     name: SparseTextLikeClass.name,
     newEmpty() {
-      return SparseTextLikeClass.new();
+      return SparseTextLikeClass.empty();
     },
     isEmpty(arr: object) {
-      return (arr as SparseTextLike).isEmpty();
+      return (arr as OldSparseTextLike).isEmpty();
     },
     set(arr: object, index: number, ...values: unknown[]) {
-      return (arr as SparseTextLike).set(index, values.join(""));
+      return (arr as OldSparseTextLike).set(index, values.join(""));
     },
     delete(arr: object, index: number, count?: number) {
-      return (arr as SparseTextLike).delete(index, count);
+      return (arr as OldSparseTextLike).delete(index, count);
     },
   };
 }
@@ -72,32 +72,32 @@ export function WrapSparseTextLike(SparseTextLikeClass: {
 /**
  * Type of a class that looks like SparseIndexes.
  */
-export interface SparseIndexesLike {
+export interface OldSparseIndexesLike {
   isEmpty(): boolean;
-  add(index: number, count?: number): SparseIndexesLike;
-  delete(index: number, count?: number): SparseIndexesLike;
+  set(index: number, count?: number): OldSparseIndexesLike;
+  delete(index: number, count?: number): OldSparseIndexesLike;
 }
 
 /**
  * Given a SparseIndexes-like class, returns the obvious Implementation.
  */
-export function WrapSparseIndexesLike(SparseIndexesLikeClass: {
+export function WrapOldSparseIndexesLike(SparseIndexesLikeClass: {
   name: string;
-  "new"(): SparseIndexesLike;
+  empty(): OldSparseIndexesLike;
 }): Implementation {
   return {
     name: SparseIndexesLikeClass.name,
     newEmpty() {
-      return SparseIndexesLikeClass.new();
+      return SparseIndexesLikeClass.empty();
     },
     isEmpty(arr: object) {
-      return (arr as SparseIndexesLike).isEmpty();
+      return (arr as OldSparseIndexesLike).isEmpty();
     },
     set(arr: object, index: number, ...values: unknown[]) {
-      return (arr as SparseIndexesLike).add(index, values.length);
+      return (arr as OldSparseIndexesLike).set(index, values.length);
     },
     delete(arr: object, index: number, count?: number) {
-      return (arr as SparseIndexesLike).delete(index, count);
+      return (arr as OldSparseIndexesLike).delete(index, count);
     },
   };
 }
