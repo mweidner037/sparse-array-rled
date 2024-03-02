@@ -1,41 +1,15 @@
 import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
 
-const arrayItemer: Itemer<unknown[]> = {
-  newEmpty(): unknown[] {
-    return [];
-  },
-
-  length(item: unknown[]): number {
-    return item.length;
-  },
-
-  merge(a: unknown[], b: unknown[]): unknown[] {
-    a.push(...b);
-    return a;
-  },
-
-  slice(item: unknown[], start?: number, end?: number | undefined): unknown[] {
-    return item.slice(start, end);
-  },
-
-  update(item: unknown[], start: number, replace: unknown[]): unknown[] {
-    if (start === item.length) item.push(...replace);
-    else {
-      for (let i = 0; i < replace.length; i++) item[start + i] = replace[i];
-    }
-    return item;
-  },
-
-  shorten(item: unknown[], newLength: number): unknown[] {
-    item.length = newLength;
-    return item;
-  },
-} as const;
-
 /**
  * Run-length encoding. Even indexes are T[], odd indexes are delete counts.
  */
 export type SerializedSparseArray<T> = Array<T[] | number>;
+
+export interface ArraySlicer<T> {
+  nextSlice(
+    endIndex: number | null
+  ): IterableIterator<[index: number, values: T[]]>;
+}
 
 export class SparseArray<T> extends SparseItems<T[]> {
   // TODO: copy static constructors to other subclasses.
@@ -133,6 +107,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
     }
   }
 
+  // TODO: superclass method? Since common like has().
   *keys(): IterableIterator<number> {
     for (const [index] of this.entries()) yield index;
   }
@@ -168,8 +143,34 @@ export class SparseArray<T> extends SparseItems<T[]> {
   }
 }
 
-export interface ArraySlicer<T> {
-  nextSlice(
-    endIndex: number | null
-  ): IterableIterator<[index: number, values: T[]]>;
-}
+const arrayItemer: Itemer<unknown[]> = {
+  newEmpty(): unknown[] {
+    return [];
+  },
+
+  length(item: unknown[]): number {
+    return item.length;
+  },
+
+  merge(a: unknown[], b: unknown[]): unknown[] {
+    a.push(...b);
+    return a;
+  },
+
+  slice(item: unknown[], start?: number, end?: number | undefined): unknown[] {
+    return item.slice(start, end);
+  },
+
+  update(item: unknown[], start: number, replace: unknown[]): unknown[] {
+    if (start === item.length) item.push(...replace);
+    else {
+      for (let i = 0; i < replace.length; i++) item[start + i] = replace[i];
+    }
+    return item;
+  },
+
+  shorten(item: unknown[], newLength: number): unknown[] {
+    item.length = newLength;
+    return item;
+  },
+} as const;
