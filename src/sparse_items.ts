@@ -39,6 +39,14 @@ export interface Itemer<I> {
   shorten(item: I, newLength: number): I;
 }
 
+// Generic version of slicer. Override newSlicer to return your own type,
+// renaming item & redoing docs.
+export interface ItemSlicer<I> {
+  nextSlice(
+    endIndex: number | null
+  ): IterableIterator<[index: number, item: I]>;
+}
+
 export abstract class SparseItems<I> {
   // TODO: try leaving defined again, now that it's just one [] instead of two.
   protected pairs!: Pair<I>[];
@@ -80,10 +88,6 @@ export abstract class SparseItems<I> {
   // TODO: use this.constructor hack instead?
   // Likewise in deserialize().
   protected abstract construct(pairs: Pair<I>[], length: number): this;
-
-  protected constructEmpty(length = 0): this {
-    return this.construct([], length);
-  }
 
   // Return a constant copy stored outside the prototype, to avoid storing
   // a new ref per object.
@@ -207,6 +211,14 @@ export abstract class SparseItems<I> {
     return null;
   }
 
+  newSlicer(): ItemSlicer<I> {
+    if (this.normalItem !== null) {
+      return new NormalItemSlicer(this.itemer(), this.normalItem);
+    }
+
+    return new PairSlicer(this.itemer(), this.pairs);
+  }
+
   clone(): this {
     // Deep copy.
     if (this.normalItem) {
@@ -276,7 +288,7 @@ export abstract class SparseItems<I> {
     // TODO: update length.
 
     // Avoid trivial-item edge case.
-    if (count === 0) return this.constructEmpty();
+    if (count === 0) return this.construct([], 0);
 
     if (this.normalItem !== null) {
       const normalLen = this.itemer().length(this.normalItem);
@@ -288,7 +300,7 @@ export abstract class SparseItems<I> {
             [{ index: 0, item: this.itemer().slice(this.normalItem, index) }],
             count
           );
-        } else replaced = this.constructEmpty(count);
+        } else replaced = this.construct([], count);
         if (index < normalLen) {
           this.normalItem = this.itemer().shorten(this.normalItem, index);
         }
@@ -384,7 +396,7 @@ export abstract class SparseItems<I> {
     // TODO: update length.
 
     // Avoid trivial-item edge case.
-    if (count === 0) return this.constructEmpty();
+    if (count === 0) return this.construct([], 0);
 
     if (this.normalItem !== null) {
       const normalLen = this.itemer().length(this.normalItem);
@@ -405,7 +417,7 @@ export abstract class SparseItems<I> {
             ],
             count
           );
-        } else replaced = this.constructEmpty(count);
+        } else replaced = this.construct([], count);
         this.normalItem = this.itemer().update(this.normalItem, index, item);
         return replaced;
       } else this.promoteNormalItem();
@@ -545,5 +557,98 @@ export abstract class SparseItems<I> {
       }
     }
     return [-1, index];
+  }
+}
+
+export function deserializeItems<I>(
+  serialized: (I | number)[],
+  itemer: Itemer<I>
+): [pairs: Pair<I>[], length: number] {
+  const pairs: Pair<I>[] = [];
+  let nextIndex = 0;
+
+  for (let j = 0; j < serialized.length; j++) {
+    if (j % 2 === 0) {
+      const item = serialized[j] as I;
+      const itemLength = itemer.length(item);
+      if (itemLength === 0) continue;
+      pairs.push({ index: nextIndex, item: itemer.slice(item) });
+      nextIndex += itemLength;
+    } else {
+      const deleted = serialized[j] as number;
+      nextIndex += deleted;
+    }
+  }
+
+  return [pairs, nextIndex];
+}
+
+class NormalItemSlicer<I> implements ItemSlicer<I> {
+  private index = 0;
+
+  constructor(
+    private readonly itemer: Itemer<I>,
+    private readonly normalItem: I
+  ) {}
+
+  *nextSlice(
+    endIndex: number | null
+  ): IterableIterator<[index: number, item: I]> {
+    if (endIndex === null) {
+      if (this.index < this.itemer.length(this.normalItem)) {
+        yield [this.index, this.itemer.slice(this.normalItem, this.index)];
+      }
+    } else {
+      const actualEndIndex = Math.min(
+        this.itemer.length(this.normalItem),
+        endIndex
+      );
+      if (this.index < actualEndIndex) {
+        yield [
+          this.index,
+          this.itemer.slice(this.normalItem, this.index, actualEndIndex),
+        ];
+      }
+      this.index = endIndex;
+    }
+  }
+}
+
+class PairSlicer<I> implements ItemSlicer<I> {
+  private i = 0;
+  private offset = 0;
+
+  constructor(
+    private readonly itemer: Itemer<I>,
+    private readonly pairs: Pair<I>[]
+  ) {}
+
+  *nextSlice(
+    endIndex: number | null
+  ): IterableIterator<[index: number, item: I]> {
+    while (this.i < this.pairs.length) {
+      const pair = this.pairs[this.i];
+      if (endIndex !== null && endIndex <= pair.index) return;
+      const pairEnd = pair.index + this.itemer.length(pair.item);
+      if (endIndex === null || endIndex >= pairEnd) {
+        // Always slice, to prevent exposing internal items.
+        yield [
+          pair.index + this.offset,
+          this.itemer.slice(pair.item, this.offset),
+        ];
+        this.i++;
+        this.offset = 0;
+      } else {
+        const endOffset = endIndex - pair.index;
+        // Handle duplicate-endIndex case without empty emits.
+        if (endOffset > this.offset) {
+          yield [
+            pair.index + this.offset,
+            this.itemer.slice(pair.item, this.offset, endOffset),
+          ];
+          this.offset = endOffset;
+        }
+      }
+    }
   }
 }

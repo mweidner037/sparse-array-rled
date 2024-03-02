@@ -1,4 +1,4 @@
-import { Itemer, Pair, SparseItems } from "./sparse_items";
+import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
 
 const arrayItemer: Itemer<unknown[]> = {
   newEmpty(): unknown[] {
@@ -44,22 +44,9 @@ export class SparseArray<T> extends SparseItems<T[]> {
   }
 
   static deserialize<T>(serialized: SerializedSparseArray<T>): SparseArray<T> {
-    const pairs: Pair<T[]>[] = [];
-    let nextIndex = 0;
-
-    for (let j = 0; j < serialized.length; j++) {
-      if (j % 2 === 0) {
-        const item = serialized[j] as T[];
-        if (item.length === 0) continue;
-        pairs.push({ index: nextIndex, item: item.slice() });
-        nextIndex += item.length;
-      } else {
-        const deleted = serialized[j] as number;
-        nextIndex += deleted;
-      }
-    }
-
-    return new this(pairs, nextIndex);
+    return new this(
+      ...deserializeItems(serialized, arrayItemer as Itemer<T[]>)
+    );
   }
 
   /**
@@ -126,15 +113,12 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return [index, item[offset]];
   }
 
-  newSlicer(): Slicer<T> {
-    if (this.normalItem !== null) {
-      return new NormalItemSlicer(this.normalItem);
-    }
-
-    return new PairSlicer(this.pairs);
+  newSlicer(): ArraySlicer<T> {
+    return super.newSlicer();
   }
 
   *entries(): IterableIterator<[index: number, value: T]> {
+    // TODO: expose pairs getter to make this easier, which auto-wraps normalItem for readonly queries?
     if (this.normalItem !== null) {
       for (let index = 0; index < this.normalItem.length; index++) {
         yield [index, this.normalItem[index]];
@@ -184,61 +168,8 @@ export class SparseArray<T> extends SparseItems<T[]> {
   }
 }
 
-export interface Slicer<T> {
+export interface ArraySlicer<T> {
   nextSlice(
     endIndex: number | null
   ): IterableIterator<[index: number, values: T[]]>;
-}
-
-class NormalItemSlicer<T> implements Slicer<T> {
-  private index = 0;
-
-  constructor(private readonly normalItem: T[]) {}
-
-  *nextSlice(
-    endIndex: number | null
-  ): IterableIterator<[index: number, values: T[]]> {
-    if (endIndex === null) {
-      if (this.index < this.normalItem.length)
-        yield [this.index, this.normalItem.slice(this.index)];
-    } else {
-      const actualEndIndex = Math.min(this.normalItem.length, endIndex);
-      if (this.index < actualEndIndex)
-        yield [this.index, this.normalItem.slice(this.index, actualEndIndex)];
-      this.index = endIndex;
-    }
-  }
-}
-
-class PairSlicer<T> implements Slicer<T> {
-  private i = 0;
-  private offset = 0;
-
-  constructor(private readonly pairs: Pair<T[]>[]) {}
-
-  *nextSlice(
-    endIndex: number | null
-  ): IterableIterator<[index: number, values: T[]]> {
-    while (this.i < this.pairs.length) {
-      const pair = this.pairs[this.i];
-      if (endIndex !== null && endIndex <= pair.index) return;
-      const pairEnd = pair.index + pair.item.length;
-      if (endIndex === null || endIndex >= pairEnd) {
-        // Always slice, to prevent exposing internal items.
-        yield [pair.index + this.offset, pair.item.slice(this.offset)];
-        this.i++;
-        this.offset = 0;
-      } else {
-        const endOffset = endIndex - pair.index;
-        // Handle duplicate-endIndex case without empty emits.
-        if (endOffset > this.offset) {
-          yield [
-            pair.index + this.offset,
-            pair.item.slice(this.offset, endOffset),
-          ];
-          this.offset = endOffset;
-        }
-      }
-    }
-  }
 }
