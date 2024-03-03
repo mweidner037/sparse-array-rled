@@ -64,8 +64,13 @@ export interface Itemer<I> {
 export interface ItemSlicer<I> {
   /**
    * Returns an array of items in the next slice,
-   * continuing from the previous index or 0
-   * (inclusive) to endIndex or the end of the array (exclusive).
+   * continuing from the previous index (inclusive) to endIndex (exclusive).
+   * 
+   * Each item [index, item] indicates a run of present values starting at index,
+   * ending at either endIndex or a deleted index.
+   *
+   * The first call starts at index 0. To end at the end of the array,
+   * set `endIndex = null`.
    */
   nextSlice(endIndex: number | null): Array<[index: number, item: I]>;
 }
@@ -75,8 +80,6 @@ export interface ItemSlicer<I> {
 // - Don't set _pairs until forced (hidden class change).
 // - Don't store _length unless it differs from the "true" length.
 
-// Note: I cannot contain null.
-// Iteration vs mutation generally unsafe.
 
 /**
  * Templated implementation of the published Sparse* classes.
@@ -161,7 +164,7 @@ export abstract class SparseItems<I> {
    * The length of the array.
    *
    * Like an ordinary `Array`, this is by default one more than the index of the
-   * last present value, but you may manually set it to a larger value.
+   * last present value, but you can manually set it to a larger value.
    *
    * Setting `length` to a value smaller than the "true" length deletes indices
    * \>= the new length.
@@ -276,19 +279,24 @@ export abstract class SparseItems<I> {
 
   /**
    * Returns whether index is present in the array.
-   *
-   * If index is `>= this.length`, returns false without throwing an error.
+   * 
+   * No error is thrown for index >= this.length.
    */
   has(index: number): boolean {
     return this._get(index) !== null;
   }
 
   /**
-   * Returns the `count`-th present value, starting at startIndex (inclusive).
-   *
+   * Finds the index corresponding to the given count.
+   * 
+   * That is, we advance through the array
+   * until reaching the `count`-th present value, returning its index.
    * If the array ends before finding such a value, returns null.
    *
    * Invert with countAt.
+   * 
+   * @param startIndex Index to start searching. If specified, only indices >= startIndex
+   * contribute towards `count`.
    */
   _findCount(
     count: number,
@@ -342,7 +350,7 @@ export abstract class SparseItems<I> {
   // }
 
   /**
-   * Iterates over the present indices (keys).
+   * Iterates over the present indices (keys), in order.
    */
   *keys(): IterableIterator<number> {
     for (const pair of this.asPairs()) {
@@ -367,18 +375,13 @@ export abstract class SparseItems<I> {
     );
   }
 
-  // trimmed: if true, omits last deleted item (due to length).
-
   /**
    * Returns a compact JSON-serializable representation of our state.
    *
    * The return value uses a run-length encoding: it alternates between
    * - present items (even indices), and
    * - numbers (odd indices), represent that number of deleted values.
-   *
-   * Array entries are always nontrivial (nonempty / nonzero), except for the 0th
-   * entry, which may be an empty item (if index 0 is deleted).
-   *
+   * 
    * @param trimmed If true, the return value omits deletions at the end of the array,
    * i.e., between the last present value and `this.length`. So when true,
    * the return value never ends in a number.
@@ -419,7 +422,8 @@ export abstract class SparseItems<I> {
    *
    * That is, deletes all values in the range [index, index + count).
    *
-   * @returns A 0-indexed sparse array of the previous values.
+   * @returns A sparse array of the previous values.
+   * Index 0 in the returned array corresponds to `index` in this array.
    */
   protected _delete(index: number, count: number): this {
     // TODO: count >= 0 check?
@@ -538,7 +542,8 @@ export abstract class SparseItems<I> {
    * That is, sets all values in the range [index, index + item.length) to the
    * given values.
    *
-   * @returns A 0-indexed sparse array of the previous values.
+   * @returns A sparse array of the previous values.
+   * Index 0 in the returned array corresponds to `index` in this array.
    */
   protected _set(index: number, item: I): this {
     const count = this.itemer().length(item);

@@ -21,3 +21,6 @@ Setup and package versions should be current as of Feb 19 2023.
 - Search for TODO.
 - Write your library in `src/`.
 - Replace this README.
+
+
+- Iterators unsafe with concurrent mutation
