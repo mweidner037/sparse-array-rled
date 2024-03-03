@@ -162,8 +162,8 @@ export abstract class SparseItems<I> {
   /**
    * The length of the array.
    *
-   * Like an ordinary `Array`, this is by default one more than the index of the
-   * last present value, but you can manually set it to a larger value.
+   * By default, this is one more than the greatest touched (set/deleted) index,
+   * but you can manually set it to a larger value.
    *
    * Setting `length` to a value smaller than the "true" length deletes indices
    * \>= the new length.
@@ -425,11 +425,10 @@ export abstract class SparseItems<I> {
    * Index 0 in the returned array corresponds to `index` in this array.
    */
   protected _delete(index: number, count: number): this {
-    // If length appears to be due to one of the deleted values,
-    // update it to the new "true" length.
-    if (this._length <= index + count) {
-      // TODO
-    }
+    // Update length to "touch" [index, index + count), even if count is 0.
+    // TODO: instead, match Array's behavior: if this deletes up to the current _length,
+    // reduce _length.
+    this._length = Math.max(this._length, index + count);
 
     // Avoid trivial-item edge case.
     if (count === 0) return this.construct([], 0);
