@@ -3,8 +3,8 @@ import {
   append,
   backspace,
   frontAndBack,
-  martinTrace,
   randomDeletes,
+  textTrace,
 } from "./traces";
 import { BenchmarkTrace, timeOne } from "./util";
 
@@ -13,7 +13,7 @@ const traces: BenchmarkTrace[] = [
   backspace,
   randomDeletes,
   frontAndBack,
-  martinTrace,
+  textTrace,
 ];
 
 void (async function () {

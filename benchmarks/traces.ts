@@ -52,8 +52,11 @@ export function frontAndBack(impl: Implementation): void {
   }
 }
 
-const martinTraceEdits = JSON.parse(
-  fs.readFileSync("./benchmarks/martin_trace.json").toString()
+// These edits are derived by applying Martin Kleppmann's
+// [automerge-perf](https://github.com/automerge/automerge-perf) to a List from the
+// list-positions library.
+const textTraceEdits = JSON.parse(
+  fs.readFileSync("./benchmarks/text_trace.json").toString()
 ) as Array<
   | {
       type: "set";
@@ -65,20 +68,20 @@ const martinTraceEdits = JSON.parse(
 >;
 
 /**
- * Wrapper for martinTrace data, so it's easier to find in the heap profiler
+ * Wrapper for textTrace data, so it's easier to find in the heap profiler
  * (sort by Constructor in reverse order).
  */
 class _TRACE_LIST {
   constructor(readonly bunches = new Map<string, object>()) {}
 }
 
-export async function martinTrace(
+export async function textTrace(
   impl: Implementation,
   _prng: seedrandom.PRNG,
   profile: boolean
 ) {
   const list = new _TRACE_LIST();
-  for (const edit of martinTraceEdits) {
+  for (const edit of textTraceEdits) {
     if (edit.type === "set") {
       let arr = list.bunches.get(edit.bunchID);
       if (arr === undefined) {
@@ -87,6 +90,7 @@ export async function martinTrace(
       }
       impl.set(arr, edit.index, edit.value);
     } else {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const arr = list.bunches.get(edit.bunchID)!;
       impl.delete(arr, edit.index);
       if (impl.isEmpty(arr)) list.bunches.delete(edit.bunchID);
@@ -100,5 +104,5 @@ export async function martinTrace(
   }
 }
 
-// TODO: get benchmarks
-// TODO: "unit tests" for Implementation? So we can check all of them before trusting the results.
+// TODO: get, countAt, findCount benchmarks
+// TODO: serialized size benchmarks? Since that's one of our claims over plain arrays.

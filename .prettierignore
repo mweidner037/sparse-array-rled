@@ -3,5 +3,5 @@
 /.nyc_output/*
 /coverage/*
 LICENSE
-benchmarks/martin_trace.json
+benchmarks/text_trace.json
 benchmark_results.md

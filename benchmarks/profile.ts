@@ -1,8 +1,10 @@
 import { allImpls } from "./impls";
-import { martinTrace } from "./traces";
+import { textTrace } from "./traces";
 import { timeOne } from "./util";
 
 // Usage: npm run profile [implName = "SparseArray"]
+// Wait for "Ready to profile", then profile with Node inspector and
+// look for the _TRACE_LIST object's memory usage.
 
 const implName = process.argv[2] ?? "SparseArray";
 const impl = allImpls.find((impl) => impl.name === implName);
@@ -13,5 +15,5 @@ if (impl === undefined) {
 }
 
 void (async function () {
-  await timeOne(martinTrace, impl, true);
+  await timeOne(textTrace, impl, true);
 })();

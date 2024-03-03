@@ -40,6 +40,8 @@ For special cases, `SparseString` and `SparseIndices` implement the same functio
 
 I use this package in collaborative situations, where individual users perform actions in order, but some of these actions may be deleted/undone/not-yet-received - causing sparsity.
 
+<a id="collaborative-text-editing"></a>
+
 1. **Collaborative text/list editing:** Group sequential insertions by a single user into "bunches", which map a bunch ID to its sequence of values. Later, some values may be deleted, making the sequence sparse.
    - This is how [list-positions](https://github.com/mweidner037/list-positions#readme) represents the state of a `List`: as a `Map<bunchID, SparseArray>`.
 2. **General collaboration or peer-to-peer networking:** Track which messages you've received from another user/peer using a `SparseIndices`. Typically, this will be a single number ("all messages 0 through n-1"), but dropped/reverted messages could make the indices sparse.
@@ -175,6 +177,18 @@ To reduce repetition and code size, most functionality for the three exported cl
 
 ## Performance
 
-TODO
+To benchmark the library, I applied the operations corresponding to a collaborative text-editing trace (Martin Kleppmann's [automerge-perf](https://github.com/automerge/automerge-perf)), simulating this library's usage by the [list-positions](https://github.com/mweidner037/list-positions#readme) library as described [above](#collaborative-text-editing). The trace uses 3301 sparse arrays with average length 55 (max length 7604). It is 260k ops long, with 182k sets and 77k deletes, and the ending state has 105k chars.
 
-Unless otherwise specified, each benchmark performs 1,000,000 operations, so 1 ms measured -> 1 ns per operation.
+In addition to this library's classes, the benchmarks test two ways of using a plain `Array<string>` in sparse mode (see [benchmarks/impls/plain_array.ts](./benchmarks/impls/plain_array.ts)).
+
+Results:
+
+| Implementation | Total time (ms) | Ending memory usage (MB) |
+| -------------- | --------------- | ------------------------ |
+| SparseArray    | 59.3 +- 5.4     | 1.98                     |
+| SparseString   | 67.5 +- 9.5     | 1.13                     |
+| SparseIndices  | 53.2 +- 1.5     | 0.48                     |
+| PlainArray     | 89.3 +- 1.1     | 2.02                     |
+| PlainArray2    | 60.7 +- 2.8     | 1.90                     |
+
+For additional microbenchmarks, see [benchmark_results.md](./benchmark_results.md), which reports the time to perform 1,000,000 operations of various types (implemented in [benchmarks/traces.ts](./benchmarks/traces.ts)).

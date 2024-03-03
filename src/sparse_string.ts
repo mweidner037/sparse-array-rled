@@ -126,7 +126,6 @@ export class SparseString extends SparseItems<string> {
     return [true, item[offset]];
   }
 
-
   /**
    * Returns the char at index, or undefined if not present.
    *
@@ -161,7 +160,6 @@ export class SparseString extends SparseItems<string> {
   newSlicer(): StringSlicer {
     return super.newSlicer();
   }
-
 
   /**
    * Iterates over the present [index, char] pairs, in order.

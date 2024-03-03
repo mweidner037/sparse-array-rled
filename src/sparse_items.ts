@@ -65,7 +65,7 @@ export interface ItemSlicer<I> {
   /**
    * Returns an array of items in the next slice,
    * continuing from the previous index (inclusive) to endIndex (exclusive).
-   * 
+   *
    * Each item [index, item] indicates a run of present values starting at index,
    * ending at either endIndex or a deleted index.
    *
@@ -79,7 +79,6 @@ export interface ItemSlicer<I> {
 // - switch back to normalItem at end of set/delete, if possible.
 // - Don't set _pairs until forced (hidden class change).
 // - Don't store _length unless it differs from the "true" length.
-
 
 /**
  * Templated implementation of the published Sparse* classes.
@@ -221,7 +220,7 @@ export abstract class SparseItems<I> {
 
   /**
    * Returns the count at index, plus whether index is present.
-   * 
+   *
    * The "count at index" is the number of present values up to but excluding index.
    * Equivalent, it is the `c` such that index is
    * the `c`-th present value (or would be if present).
@@ -279,7 +278,7 @@ export abstract class SparseItems<I> {
 
   /**
    * Returns whether index is present in the array.
-   * 
+   *
    * No error is thrown for index >= this.length.
    */
   has(index: number): boolean {
@@ -288,13 +287,13 @@ export abstract class SparseItems<I> {
 
   /**
    * Finds the index corresponding to the given count.
-   * 
+   *
    * That is, we advance through the array
    * until reaching the `count`-th present value, returning its index.
    * If the array ends before finding such a value, returns null.
    *
    * Invert with countAt.
-   * 
+   *
    * @param startIndex Index to start searching. If specified, only indices >= startIndex
    * contribute towards `count`.
    */
@@ -381,7 +380,7 @@ export abstract class SparseItems<I> {
    * The return value uses a run-length encoding: it alternates between
    * - present items (even indices), and
    * - numbers (odd indices), represent that number of deleted values.
-   * 
+   *
    * @param trimmed If true, the return value omits deletions at the end of the array,
    * i.e., between the last present value and `this.length`. So when true,
    * the return value never ends in a number.
