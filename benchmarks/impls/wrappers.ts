@@ -74,7 +74,7 @@ export function WrapSparseStringLike(SparseStringLikeClass: {
  */
 export interface SparseIndicesLike {
   isEmpty(): boolean;
-  add(index: number, count?: number): SparseIndicesLike;
+  set(index: number, count?: number): SparseIndicesLike;
   delete(index: number, count?: number): SparseIndicesLike;
 }
 
@@ -94,7 +94,7 @@ export function WrapSparseIndicesLike(SparseIndicesLikeClass: {
       return (arr as SparseIndicesLike).isEmpty();
     },
     set(arr: object, index: number, ...values: unknown[]) {
-      return (arr as SparseIndicesLike).add(index, values.length);
+      return (arr as SparseIndicesLike).set(index, values.length);
     },
     delete(arr: object, index: number, count?: number) {
       return (arr as SparseIndicesLike).delete(index, count);

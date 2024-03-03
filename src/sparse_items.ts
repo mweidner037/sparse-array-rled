@@ -221,10 +221,10 @@ export abstract class SparseItems<I> {
 
   /**
    * Returns the count at index, plus whether index is present.
-   *
-   * The "count at index" is the `c` such that index is
+   * 
+   * The "count at index" is the number of present values up to but excluding index.
+   * Equivalent, it is the `c` such that index is
    * the `c`-th present value (or would be if present).
-   * Equivalently, it is the number of present values strictly prior to index.
    *
    * Invert with findCount.
    */

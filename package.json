@@ -1,20 +1,21 @@
 {
   "name": "rle-sparse-array",
   "version": "0.1.0",
-  "description": "Run-length encoded sparse array",
+  "description": "Sparse array with run-length encoded deletions",
   "author": "Matthew Weidner",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/mweidner037/TODO/issues"
+    "url": "https://github.com/mweidner037/rle-sparse-array/issues"
   },
-  "homepage": "https://github.com/mweidner037/TODO/#readme",
+  "homepage": "https://github.com/mweidner037/rle-sparse-array/#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mweidner037/TODO.git"
+    "url": "git+https://github.com/mweidner037/rle-sparse-array.git"
   },
   "keywords": [
     "sparse array",
-    "run-length encoding"
+    "run-length encoding",
+    "array"
   ],
   "main": "build/commonjs/index.js",
   "browser": "build/esm/index.js",

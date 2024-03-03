@@ -14,7 +14,7 @@ export interface ArraySlicer<T> {
   /**
    * Returns an array of items in the next slice,
    * continuing from the previous index (inclusive) to endIndex (exclusive).
-   * 
+   *
    * Each item [index, values] indicates a run of present values starting at index,
    * ending at either endIndex or a deleted index.
    *
@@ -36,8 +36,8 @@ export interface ArraySlicer<T> {
  * 3. Convert between a count `c` and the `c`-th present entry.
  *
  * For ordinary array tasks, SparseArray aims to have comparable
- * memory usage and acceptable speed. Indexed accesses are slower
- * in principle due to internal searches (similar to balanced-tree
+ * memory usage and acceptable speed relative to an ordinary Array. However, indexed accesses are slower
+ * in principle, due to internal searches (similar to balanced-tree
  * collections).
  *
  * To construct a SparseArray, use the static `new`, `fromEntries`, or `deserialize` methods.
@@ -114,7 +114,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * The return value uses a run-length encoding: it alternates between
    * - arrays of present values (even indices), and
    * - numbers (odd indices), representing that number of deleted values.
-   * 
+   *
    * For example, the sparse array `["foo", "bar", , , , "X", "yy"]` serializes to `[["foo", "bar"], 3, ["X", "yy"]]`.
    *
    * @param trimmed If true, the return value omits deletions at the end of the array,
