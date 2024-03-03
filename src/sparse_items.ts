@@ -1,67 +1,98 @@
-// Experimental implementation that stores its state as an "index array"
-// telling you where each present segment starts, plus the segments
-// in a parallel array.
-// - Possibility of binary search in locate (TODO: need get/find benchmarks to really exercise this)
-// - Hope that index array is optimized by the runtime for being a small-int array.
-// - Parallel arrays should be smaller than array of pair objects.
-// - Omit _length on auto-trimmed arrays?
-
 import { nonNull } from "./util";
 
+/**
+ * SparseItem's state is represented as an array of pairs { index, item },
+ * indicating that item starts at index and ends at a deleted section.
+ * Pairs are in order by index.
+ */
 export interface Pair<I> {
   index: number;
   item: I;
 }
 
-// TODO: delete unused methods
+// TODO: cleanup methods?
+/**
+ * Item-type-specific functions used by SparseItems.
+ */
 export interface Itemer<I> {
+  /**
+   * Returns a new empty item.
+   */
   newEmpty(): I;
 
+  /**
+   * Returns the length of item.
+   */
   length(item: I): number;
 
   /**
-   * Preferably modify a in-place and return it.
+   * Returns the merge (concatenation) of a and b.
+   *
+   * May modify a in-place and return it.
    */
   merge(a: I, b: I): I;
 
   /**
-   * Return a new, unaliased item even if redundant.
+   * Returns a new (non-aliased) item representing the given slice.
    */
   slice(item: I, start?: number, end?: number): I;
 
   /**
-   * Replace [index, index + replace.length) with replace's values. TODO: might go beyond existing length; should use push instead of overwrite in T[] case.
+   * Returns item with values replaced starting at start.
+   * Note: the replacing values may extend beyond the current end of item.
    *
-   * Preferably modify item in-place and return it.
+   * May modify item in-place and return it.
    */
   update(item: I, start: number, replace: I): I;
 
   /**
-   * Preferably modify item in-place and return it.
+   * Returns item shortened the given length, which is guaranteed to
+   * be <= item.length.
    *
-   * It is promised that newLength <= item.length (TODO: check).
+   * May modify item in-place and return it.
    */
   shorten(item: I, newLength: number): I;
 }
 
-// Generic version of slicer. Override newSlicer to return your own type,
-// renaming item & redoing docs.
+/**
+ * Generic type for output of SparseItems.newSlicer().
+ *
+ * Define a more specific version of this type (e.g. ArraySlicer),
+ * replacing `item: I` with your choice of name and your item type,
+ * and use it as the return value of your overridden newSlicer() function.
+ */
 export interface ItemSlicer<I> {
-  nextSlice(
-    endIndex: number | null
-  ): IterableIterator<[index: number, item: I]>;
+  /**
+   * Returns an array of items in the next slice,
+   * continuing from the previous index or 0
+   * (inclusive) to endIndex or the end of the array (exclusive).
+   */
+  nextSlice(endIndex: number | null): Array<[index: number, item: I]>;
 }
 
 // TODO: measure perf impacts:
 // - switch back to normalItem at end of set/delete, if possible.
 // - Don't set _pairs until forced (hidden class change).
+// - Don't store _length unless it differs from the "true" length.
 
 // Note: I cannot contain null.
 // Iteration vs mutation generally unsafe.
+
+/**
+ * Templated implementation of the published Sparse* classes.
+ *
+ * It contains code that can be implemented in common, using generic "items" of
+ * type I. Each item represents a run of present values.
+ * - SparseArray<T>: T[]
+ * - SparseText: string
+ * - SparseIndexes: number (count of present values).
+ *
+ * @typeParam I The type of items. Items must never be null.
+ */
 export abstract class SparseItems<I> {
   // The internal state is either:
-  // - `pairs: Pair<I>[], normalItem: null`: Default.
-  // - `pairs: null, normalItem: I`: Storage-optimized version of zero pairs or
+  // - `_pairs: Pair<I>[], normalItem: null`: Default.
+  // - `_pairs: null, normalItem: I`: Storage-optimized alterntive for zero pairs or
   // a single pair `{ index: 0, item: this.normalItem }`.
   //
   // This may switch between the two states at will.
@@ -71,6 +102,11 @@ export abstract class SparseItems<I> {
 
   private _length: number;
 
+  /**
+   * Constructs a SparseItems with the given state, performing no validation.
+   *
+   * Don't override this constructor.
+   */
   protected constructor(pairs: Pair<I>[], length: number) {
     if (pairs.length === 0) {
       this._normalItem = this.itemer().newEmpty();
@@ -82,15 +118,24 @@ export abstract class SparseItems<I> {
     this._length = length;
   }
 
+  /**
+   * We can't directly force subclasses to use the same constructor; instead, we use
+   * this abstract method to construct instances of `this` as if we had called
+   * our own constructor.
+   */
   protected abstract construct(pairs: Pair<I>[], length: number): this;
 
-  // Return a constant copy stored outside the prototype, to avoid storing
-  // a new ref per object.
+  /**
+   * Returns an Itemer for working with our item type.
+   *
+   * To avoid storing the Itemer once per object, this method should return a global
+   * constant.
+   */
   protected abstract itemer(): Itemer<I>;
 
   /**
    * Returns a *read-only* (unsafe to mutate) copy of this's state as Pair<I>[],
-   * hiding whether the current internal state is _pairs or normalItem.
+   * hiding details of the internal state (_normalItems).
    */
   protected asPairs(): readonly Pair<I>[] {
     if (this._normalItem !== null) {
@@ -101,7 +146,8 @@ export abstract class SparseItems<I> {
   }
 
   /**
-   * Forces the internal state to use this._pairs if it is not already, and returns this._pairs.
+   * Forces the internal state to use this._pairs if it is not already,
+   * and returns this._pairs.
    */
   private forcePairs(): Pair<I>[] {
     if (this._pairs === null) {
@@ -111,11 +157,19 @@ export abstract class SparseItems<I> {
     return this._pairs;
   }
 
+  /**
+   * The length of the array.
+   *
+   * Like an ordinary `Array`, this is by default one more than the index of the
+   * last present value, but you may manually set it to a larger value.
+   *
+   * Setting `length` to a value smaller than the "true" length deletes indices
+   * \>= the new length.
+   */
   get length(): number {
     return this._length;
   }
 
-  // Sim behavior to normal array
   set length(newLength: number) {
     if (newLength < this._length) {
       this._delete(newLength, this._length - newLength);
@@ -123,6 +177,9 @@ export abstract class SparseItems<I> {
     this._length = newLength;
   }
 
+  /**
+   * Returns the number of present values in the array.
+   */
   count(): number {
     if (this._normalItem !== null) {
       return this.itemer().length(this._normalItem);
@@ -136,7 +193,7 @@ export abstract class SparseItems<I> {
   }
 
   /**
-   * # present values in [startIndex, endIndex).
+   * Returns the number of present values within the slice [startIndex, endIndex).
    */
   countBetween(startIndex: number, endIndex: number): number {
     if (this._normalItem !== null) {
@@ -160,11 +217,11 @@ export abstract class SparseItems<I> {
   }
 
   /**
-   * Returns the count "at" index: c s.t. index is the c-th present value
-   * (or would be if it were present). Equivalently, this is the
-   * number of present values strictly prior to index.
+   * Returns the count at index, plus whether index is present.
    *
-   * Also returns whether index is present.
+   * The "count at index" is the `c` such that index is
+   * the `c`-th present value (or would be if present).
+   * Equivalently, it is the number of present values strictly prior to index.
    *
    * Invert with findCount.
    */
@@ -182,6 +239,11 @@ export abstract class SparseItems<I> {
     return [count, false];
   }
 
+  /**
+   * Returns whether the array has no present values.
+   *
+   * Note that an array may be empty but have nonzero length.
+   */
   isEmpty(): boolean {
     if (this._normalItem !== null) {
       return this.itemer().length(this._normalItem) === 0;
@@ -190,6 +252,9 @@ export abstract class SparseItems<I> {
     return nonNull(this._pairs).length === 0;
   }
 
+  /**
+   * Returns the value at index, in the form [item, offset within item].
+   */
   protected _get(index: number): [item: I, offset: number] | null {
     if (index < 0) throw new Error(`Invalid index: ${index}`);
 
@@ -200,7 +265,6 @@ export abstract class SparseItems<I> {
     }
 
     // OPT: binary search in long lists?
-    // OPT: test forward vs backward.
     for (const pair of nonNull(this._pairs)) {
       if (index < pair.index) break;
       if (index < pair.index + this.itemer().length(pair.item)) {
@@ -210,10 +274,22 @@ export abstract class SparseItems<I> {
     return null;
   }
 
+  /**
+   * Returns whether index is present in the array.
+   *
+   * If index is `>= this.length`, returns false without throwing an error.
+   */
   has(index: number): boolean {
     return this._get(index) !== null;
   }
 
+  /**
+   * Returns the `count`-th present value, starting at startIndex (inclusive).
+   *
+   * If the array ends before finding such a value, returns null.
+   *
+   * Invert with countAt.
+   */
   _findCount(
     count: number,
     startIndex = 0
@@ -248,6 +324,12 @@ export abstract class SparseItems<I> {
     return null;
   }
 
+  /**
+   * Returns a "slicer" that enumerates slices of the array in order.
+   *
+   * The slicer is more efficient than requesting each slice separately,
+   * since it "remembers its place" in our internal state.
+   */
   newSlicer(): ItemSlicer<I> {
     return new PairSlicer(this.itemer(), this.asPairs());
   }
@@ -259,6 +341,9 @@ export abstract class SparseItems<I> {
   //   }
   // }
 
+  /**
+   * Iterates over the present indices (keys).
+   */
   *keys(): IterableIterator<number> {
     for (const pair of this.asPairs()) {
       for (let j = 0; j < this.itemer().length(pair.item); j++) {
@@ -267,8 +352,12 @@ export abstract class SparseItems<I> {
     }
   }
 
+  /**
+   * Returns a shallow copy of this array.
+   */
   clone(): this {
-    // Deep copy.
+    // Deep copy our state (but without cloning values within items - hence
+    // it appears "shallow" to the caller).
     return this.construct(
       this.asPairs().map((pair) => ({
         index: pair.index,
@@ -279,6 +368,21 @@ export abstract class SparseItems<I> {
   }
 
   // trimmed: if true, omits last deleted item (due to length).
+
+  /**
+   * Returns a compact JSON-serializable representation of our state.
+   *
+   * The return value uses a run-length encoding: it alternates between
+   * - present items (even indices), and
+   * - numbers (odd indices), represent that number of deleted values.
+   *
+   * Array entries are always nontrivial (nonempty / nonzero), except for the 0th
+   * entry, which may be an empty item (if index 0 is deleted).
+   *
+   * @param trimmed If true, the return value omits deletions at the end of the array,
+   * i.e., between the last present value and `this.length`. So when true,
+   * the return value never ends in a number.
+   */
   serialize(trimmed = false): (I | number)[] {
     if (this.length === 0) return [];
 
@@ -310,10 +414,19 @@ export abstract class SparseItems<I> {
     return JSON.stringify(this.serialize());
   }
 
+  /**
+   * Deletes count values starting at index.
+   *
+   * That is, deletes all values in the range [index, index + count).
+   *
+   * @returns A 0-indexed sparse array of the previous values.
+   */
   protected _delete(index: number, count: number): this {
     // TODO: count >= 0 check?
 
     // Update length to "touch" [index, index + count), even if count is 0.
+    // TODO: instead, match Array's behavior: if this deletes up to the current _length,
+    // reduce _length.
     this._length = Math.max(this._length, index + count);
 
     // Avoid trivial-item edge case.
@@ -342,7 +455,7 @@ export abstract class SparseItems<I> {
 
     const replacedPairs: Pair<I>[] = [];
 
-    const [sI, sOffset] = getSegment(pairs, index, true);
+    const [sI, sOffset] = locateForMutation(pairs, index, true);
     if (sI !== -1) {
       const start = pairs[sI];
       const sLength = this.itemer().length(start.item);
@@ -419,6 +532,14 @@ export abstract class SparseItems<I> {
     return this.construct(replacedPairs, count);
   }
 
+  /**
+   * Sets values starting at index.
+   *
+   * That is, sets all values in the range [index, index + item.length) to the
+   * given values.
+   *
+   * @returns A 0-indexed sparse array of the previous values.
+   */
   protected _set(index: number, item: I): this {
     const count = this.itemer().length(item);
 
@@ -474,7 +595,7 @@ export abstract class SparseItems<I> {
 
     const replacedPairs: Pair<I>[] = [];
 
-    const [sI, sOffset] = getSegment(pairs, index, false);
+    const [sI, sOffset] = locateForMutation(pairs, index, false);
     let itemAdded = false;
     if (sI !== -1) {
       const start = pairs[sI].item;
@@ -565,6 +686,12 @@ export abstract class SparseItems<I> {
   }
 }
 
+/**
+ * Templated implementation of deserialization
+ *
+ * Each subclass implements a static `deserialize` method as
+ * `return new this(...deserializeItems(serialized, <class's itemer>))`.
+ */
 export function deserializeItems<I>(
   serialized: (I | number)[],
   itemer: Itemer<I>
@@ -588,6 +715,9 @@ export function deserializeItems<I>(
   return [pairs, nextIndex];
 }
 
+/**
+ * Templated implementation of ItemSlicer, used by SparseItems.newSlicer.
+ */
 class PairSlicer<I> implements ItemSlicer<I> {
   private i = 0;
   private offset = 0;
@@ -597,66 +727,62 @@ class PairSlicer<I> implements ItemSlicer<I> {
     private readonly pairs: readonly Pair<I>[]
   ) {}
 
-  /**
-   * Must consume entire previous slice before calling again.
-   * (TODO: Use array return value to prevent this concern?)
-   */
-  *nextSlice(
-    endIndex: number | null
-  ): IterableIterator<[index: number, item: I]> {
+  nextSlice(endIndex: number | null): Array<[index: number, item: I]> {
+    const ret: Array<[index: number, item: I]> = [];
+
     while (this.i < this.pairs.length) {
       const pair = this.pairs[this.i];
-      if (endIndex !== null && endIndex <= pair.index) return;
+      if (endIndex !== null && endIndex <= pair.index) return ret;
       const pairEnd = pair.index + this.itemer.length(pair.item);
       if (endIndex === null || endIndex >= pairEnd) {
-        yield [
+        ret.push([
           pair.index + this.offset,
           // Always slice, to prevent exposing internal items.
           this.itemer.slice(pair.item, this.offset),
-        ];
+        ]);
         this.i++;
         this.offset = 0;
       } else {
         const endOffset = endIndex - pair.index;
         // Handle duplicate-endIndex case without empty emits.
         if (endOffset > this.offset) {
-          yield [
+          ret.push([
             pair.index + this.offset,
             this.itemer.slice(pair.item, this.offset, endOffset),
-          ];
+          ]);
           this.offset = endOffset;
         }
-        return;
+        return ret;
       }
     }
+    return ret;
   }
 }
 
-// TODO: remove refs to "segment"?
 /**
- * Returns info about the segment whose present or deleted region contains index.
- * - i: The segment's index.
- * - offset: index - (segment start index).
  *
- * Only valid when normalItem is null.
+ * Locates the given index within pairs.
  *
- * If index is before any segments, returns [-1, index].
+ * index corresponds to pairs[i].item at the given offset, which may be
+ * beyond the end of the item. Except, if index precedes all present
+ * values, returns [-1, index].
  *
- * @param includeEnds If index is at the start of a segment, whether to instead
- * return the previous segment's index.
- * In this case, offset is always nonzero, unless index = -1.
+ * @param includeEnds If index lands at the start of an item, whether
+ * to instead reference the (deleted) far end of the previous item.
+ * So offset will not be zero unless this returns [-1, 0].
  */
-function getSegment<I>(
+function locateForMutation<I>(
   pairs: Pair<I>[],
   index: number,
   includeEnds: boolean
 ): [i: number, offset: number] {
+  // Since we expect mutations to be clustered towards the end, optimize
+  // for that case by searching backwards.
   // OPT: binary search in long lists?
-  // OPT: test forward (w/ append special case) vs backward.
   for (let i = pairs.length - 1; i >= 0; i--) {
-    const segIndex = pairs[i].index;
-    if (segIndex < index || (!includeEnds && segIndex === index)) {
-      return [i, index - segIndex];
+    const itemIndex = pairs[i].index;
+    if (itemIndex < index || (!includeEnds && itemIndex === index)) {
+      return [i, index - itemIndex];
     }
   }
   return [-1, index];
