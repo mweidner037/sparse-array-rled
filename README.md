@@ -1,9 +1,9 @@
-# rle-sparse-array
+# sparse-array-rled
 
 Sparse array with run-length encoded deletions
 
 ```bash
-npm i --save rle-sparse-array
+npm i --save sparse-array-rled
 ```
 
 ## About
@@ -52,7 +52,7 @@ I use this package in collaborative situations, where individual users perform a
 Create and mutate a sparse array:
 
 ```ts
-import { SparseArray } from "rle-sparse-array";
+import { SparseArray } from "sparse-array-rled";
 
 const arr = SparseArray.new<string>();
 arr.set(0, "a");

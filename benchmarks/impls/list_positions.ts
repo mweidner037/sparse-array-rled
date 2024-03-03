@@ -6,7 +6,7 @@ import {
 import { Implementation } from "../util";
 
 // The sparse array implementation from old versions of list-positions.
-// I started the rle-sparse-array project in order to optimize this implementation,
+// I started the sparse-array-rled project in order to optimize this implementation,
 // so it's good to measure the improvement since then.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
