@@ -425,12 +425,11 @@ export abstract class SparseItems<I> {
    * Index 0 in the returned array corresponds to `index` in this array.
    */
   protected _delete(index: number, count: number): this {
-    // TODO: count >= 0 check?
-
-    // Update length to "touch" [index, index + count), even if count is 0.
-    // TODO: instead, match Array's behavior: if this deletes up to the current _length,
-    // reduce _length.
-    this._length = Math.max(this._length, index + count);
+    // If length appears to be due to one of the deleted values,
+    // update it to the new "true" length.
+    if (this._length <= index + count) {
+      // TODO
+    }
 
     // Avoid trivial-item edge case.
     if (count === 0) return this.construct([], 0);
