@@ -1,22 +1,20 @@
 import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
 
-export type SerializedSparseIndexes = Array<number>;
+export type SerializedSparseIndices = Array<number>;
 
-export interface IndexesSlicer {
-  nextSlice(
-    endIndex: number | null
-  ): IterableIterator<[index: number, count: number]>;
+export interface IndicesSlicer {
+  nextSlice(endIndex: number | null): Array<[index: number, count: number]>;
 }
 
-export class SparseIndexes extends SparseItems<number> {
-  static new(length = 0): SparseIndexes {
+export class SparseIndices extends SparseItems<number> {
+  static new(length = 0): SparseIndices {
     return new this([], length);
   }
-  static deserialize(serialized: SerializedSparseIndexes): SparseIndexes {
+  static deserialize(serialized: SerializedSparseIndices): SparseIndices {
     return new this(...deserializeItems(serialized, indexesItemer));
   }
 
-  static fromKeys(keys: Iterable<number>, length?: number): SparseIndexes {
+  static fromKeys(keys: Iterable<number>, length?: number): SparseIndices {
     const pairs: Pair<number>[] = [];
     let curLength = 0;
 
@@ -45,7 +43,7 @@ export class SparseIndexes extends SparseItems<number> {
     return new this(pairs, length ?? curLength);
   }
 
-  serialize(trimmed?: boolean): SerializedSparseIndexes {
+  serialize(trimmed?: boolean): SerializedSparseIndices {
     return super.serialize(trimmed);
   }
 
@@ -55,7 +53,7 @@ export class SparseIndexes extends SparseItems<number> {
     return located[0];
   }
 
-  newSlicer(): IndexesSlicer {
+  newSlicer(): IndicesSlicer {
     return super.newSlicer();
   }
 
@@ -66,7 +64,7 @@ export class SparseIndexes extends SparseItems<number> {
    * @returns The replaced values, as a sparse array whose index 0 corresponds
    * to our index, and whose length is values.length (untrimmed).
    */
-  add(index: number, count = 1): SparseIndexes {
+  add(index: number, count = 1): SparseIndices {
     return this._set(index, count);
   }
 
@@ -77,12 +75,12 @@ export class SparseIndexes extends SparseItems<number> {
    * @returns The replaced values, as a sparse array whose index 0 corresponds
    * to our index, and whose length is count (untrimmed).
    */
-  delete(index: number, count = 1): SparseIndexes {
+  delete(index: number, count = 1): SparseIndices {
     return this._delete(index, count);
   }
 
   protected construct(pairs: Pair<number>[], length: number): this {
-    return new SparseIndexes(pairs, length) as this;
+    return new SparseIndices(pairs, length) as this;
   }
 
   protected itemer() {

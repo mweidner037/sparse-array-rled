@@ -37,67 +37,67 @@ export function WrapOldSparseArrayLike(
 }
 
 /**
- * Type of a class that looks like SparseText.
+ * Type of a class that looks like SparseString.
  */
-export interface OldSparseTextLike {
+export interface OldSparseStringLike {
   isEmpty(): boolean;
-  set(index: number, chars: string): OldSparseTextLike;
-  delete(index: number, count?: number): OldSparseTextLike;
+  set(index: number, chars: string): OldSparseStringLike;
+  delete(index: number, count?: number): OldSparseStringLike;
 }
 
 /**
  * Given a SparseArray-like class, returns the obvious Implementation.
  */
-export function WrapOldSparseTextLike(SparseTextLikeClass: {
+export function WrapOldSparseStringLike(SparseStringLikeClass: {
   name: string;
-  empty(): OldSparseTextLike;
+  empty(): OldSparseStringLike;
 }): Implementation {
   return {
-    name: SparseTextLikeClass.name,
+    name: SparseStringLikeClass.name,
     newEmpty() {
-      return SparseTextLikeClass.empty();
+      return SparseStringLikeClass.empty();
     },
     isEmpty(arr: object) {
-      return (arr as OldSparseTextLike).isEmpty();
+      return (arr as OldSparseStringLike).isEmpty();
     },
     set(arr: object, index: number, ...values: unknown[]) {
-      return (arr as OldSparseTextLike).set(index, values.join(""));
+      return (arr as OldSparseStringLike).set(index, values.join(""));
     },
     delete(arr: object, index: number, count?: number) {
-      return (arr as OldSparseTextLike).delete(index, count);
+      return (arr as OldSparseStringLike).delete(index, count);
     },
   };
 }
 
 /**
- * Type of a class that looks like SparseIndexes.
+ * Type of a class that looks like SparseIndices.
  */
-export interface OldSparseIndexesLike {
+export interface OldSparseIndicesLike {
   isEmpty(): boolean;
-  set(index: number, count?: number): OldSparseIndexesLike;
-  delete(index: number, count?: number): OldSparseIndexesLike;
+  set(index: number, count?: number): OldSparseIndicesLike;
+  delete(index: number, count?: number): OldSparseIndicesLike;
 }
 
 /**
- * Given a SparseIndexes-like class, returns the obvious Implementation.
+ * Given a SparseIndices-like class, returns the obvious Implementation.
  */
-export function WrapOldSparseIndexesLike(SparseIndexesLikeClass: {
+export function WrapOldSparseIndicesLike(SparseIndicesLikeClass: {
   name: string;
-  empty(): OldSparseIndexesLike;
+  empty(): OldSparseIndicesLike;
 }): Implementation {
   return {
-    name: SparseIndexesLikeClass.name,
+    name: SparseIndicesLikeClass.name,
     newEmpty() {
-      return SparseIndexesLikeClass.empty();
+      return SparseIndicesLikeClass.empty();
     },
     isEmpty(arr: object) {
-      return (arr as OldSparseIndexesLike).isEmpty();
+      return (arr as OldSparseIndicesLike).isEmpty();
     },
     set(arr: object, index: number, ...values: unknown[]) {
-      return (arr as OldSparseIndexesLike).set(index, values.length);
+      return (arr as OldSparseIndicesLike).set(index, values.length);
     },
     delete(arr: object, index: number, count?: number) {
-      return (arr as OldSparseIndexesLike).delete(index, count);
+      return (arr as OldSparseIndicesLike).delete(index, count);
     },
   };
 }

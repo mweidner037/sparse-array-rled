@@ -1,12 +1,12 @@
 import { SparseItems } from "./sparse_items";
 
-export class SparseText extends SparseItems<string> {
-  static empty(length = 0): SparseText {
+export class SparseString extends SparseItems<string> {
+  static empty(length = 0): SparseString {
     if (length === 0) return new this([], 0);
     else return new this(["", length], length);
   }
 
-  static fromUnsafe(state: (string | number)[]): SparseText {
+  static fromUnsafe(state: (string | number)[]): SparseString {
     let length = 0;
     for (let i = 0; i < state.length; i++) {
       if (i % 2 === 0) length += (state[i] as string).length;
@@ -15,13 +15,13 @@ export class SparseText extends SparseItems<string> {
     return new this(state, length);
   }
 
-  static from(state: (string | number)[]): SparseText {
+  static from(state: (string | number)[]): SparseString {
     // Defensive deep copy.
     // TODO: also correctness checks?
     return this.fromUnsafe(state.slice());
   }
 
-  // TODO: clone? / from(SparseText)? Can reuse length.
+  // TODO: clone? / from(SparseString)? Can reuse length.
 
   /**
    *
@@ -32,7 +32,7 @@ export class SparseText extends SparseItems<string> {
   static fromEntries(
     entries: Iterable<[index: number, char: string]>,
     length?: number
-  ): SparseText {
+  ): SparseString {
     // Last item is always present.
     const state: (string | number)[] = [""];
     // The current length of state.
@@ -106,7 +106,7 @@ export class SparseText extends SparseItems<string> {
    * @returns The replaced values, as a sparse array whose index 0 corresponds
    * to our index, and whose length is values.length (untrimmed).
    */
-  set(index: number, chars: string): SparseText {
+  set(index: number, chars: string): SparseString {
     return this.setOrDelete(index, chars, true);
   }
 
@@ -117,13 +117,13 @@ export class SparseText extends SparseItems<string> {
    * @returns The replaced values, as a sparse array whose index 0 corresponds
    * to our index, and whose length is count (untrimmed).
    */
-  delete(index: number, count = 1): SparseText {
+  delete(index: number, count = 1): SparseString {
     // TODO: count >= 0 check?
     return this.setOrDelete(index, count, false);
   }
 
   protected construct(state: (number | string)[], length: number): this {
-    return new SparseText(state, length) as this;
+    return new SparseString(state, length) as this;
   }
 
   protected itemNewEmpty(): string {

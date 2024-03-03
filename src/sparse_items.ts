@@ -84,8 +84,8 @@ export interface ItemSlicer<I> {
  * It contains code that can be implemented in common, using generic "items" of
  * type I. Each item represents a run of present values.
  * - SparseArray<T>: T[]
- * - SparseText: string
- * - SparseIndexes: number (count of present values).
+ * - SparseString: string
+ * - SparseIndices: number (count of present values).
  *
  * @typeParam I The type of items. Items must never be null.
  */

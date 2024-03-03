@@ -1,26 +1,24 @@
 import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
 
-export type SerializedSparseText = Array<string | number>;
+export type SerializedSparseString = Array<string | number>;
 
-export interface TextSlicer {
-  nextSlice(
-    endIndex: number | null
-  ): IterableIterator<[index: number, chars: string]>;
+export interface StringSlicer {
+  nextSlice(endIndex: number | null): Array<[index: number, chars: string]>;
 }
 
-export class SparseText extends SparseItems<string> {
-  static new(length = 0): SparseText {
+export class SparseString extends SparseItems<string> {
+  static new(length = 0): SparseString {
     return new this([], length);
   }
 
-  static deserialize(serialized: SerializedSparseText): SparseText {
+  static deserialize(serialized: SerializedSparseString): SparseString {
     return new this(...deserializeItems(serialized, textItemer));
   }
 
   static fromEntries(
     entries: Iterable<[index: number, char: string]>,
     length?: number
-  ): SparseText {
+  ): SparseString {
     const pairs: Pair<string>[] = [];
     let curLength = 0;
 
@@ -49,7 +47,7 @@ export class SparseText extends SparseItems<string> {
     return new this(pairs, length ?? curLength);
   }
 
-  serialize(trimmed?: boolean): SerializedSparseText {
+  serialize(trimmed?: boolean): SerializedSparseString {
     return super.serialize(trimmed);
   }
 
@@ -76,7 +74,7 @@ export class SparseText extends SparseItems<string> {
     return [index, item[offset]];
   }
 
-  newSlicer(): TextSlicer {
+  newSlicer(): StringSlicer {
     return super.newSlicer();
   }
 
@@ -95,7 +93,7 @@ export class SparseText extends SparseItems<string> {
    * @returns The replaced values, as a sparse array whose index 0 corresponds
    * to our index, and whose length is values.length (untrimmed).
    */
-  set(index: number, chars: string): SparseText {
+  set(index: number, chars: string): SparseString {
     return this._set(index, chars);
   }
 
@@ -106,12 +104,12 @@ export class SparseText extends SparseItems<string> {
    * @returns The replaced values, as a sparse array whose index 0 corresponds
    * to our index, and whose length is count (untrimmed).
    */
-  delete(index: number, count = 1): SparseText {
+  delete(index: number, count = 1): SparseString {
     return this._delete(index, count);
   }
 
   protected construct(pairs: Pair<string>[], length: number): this {
-    return new SparseText(pairs, length) as this;
+    return new SparseString(pairs, length) as this;
   }
 
   protected itemer() {

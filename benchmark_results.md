@@ -1,6 +1,6 @@
 SparseArray         append              67.6 +- 15.8 ms
-SparseText          append              123.7 +- 9.5 ms
-SparseIndexes       append              67.6 +- 5.3 ms
+SparseString          append              123.7 +- 9.5 ms
+SparseIndices       append              67.6 +- 5.3 ms
 SparseArrayDirect   append              88.2 +- 5.1 ms
 SparseArrayPairs    append              95.5 +- 9.4 ms
 SparseArrayAltern   append              93.5 +- 2.8 ms
@@ -9,8 +9,8 @@ PlainArray2         append              55.3 +- 3.2 ms
 ListPositions       append              390.4 +- 3.9 ms
 
 SparseArray         backspace           119.1 +- 1.8 ms
-SparseText          backspace           100.7 +- 7.6 ms
-SparseIndexes       backspace           66.9 +- 8.1 ms
+SparseString          backspace           100.7 +- 7.6 ms
+SparseIndices       backspace           66.9 +- 8.1 ms
 SparseArrayDirect   backspace           324.8 +- 10.2 ms
 SparseArrayPairs    backspace           183.2 +- 7.8 ms
 SparseArrayAltern   backspace           191.3 +- 9.3 ms
@@ -19,8 +19,8 @@ PlainArray2         backspace           159.4 +- 7.3 ms
 ListPositions       backspace           574.9 +- 2.7 ms
 
 SparseArray         randomDeletes       409.8 +- 4.5 ms
-SparseText          randomDeletes       463.1 +- 1.7 ms
-SparseIndexes       randomDeletes       234.5 +- 2.1 ms
+SparseString          randomDeletes       463.1 +- 1.7 ms
+SparseIndices       randomDeletes       234.5 +- 2.1 ms
 SparseArrayDirect   randomDeletes       466.2 +- 13.2 ms
 SparseArrayPairs    randomDeletes       385.6 +- 4.4 ms
 SparseArrayAltern   randomDeletes       378.7 +- 9.3 ms
@@ -29,8 +29,8 @@ PlainArray2         randomDeletes       283.9 +- 6.8 ms
 ListPositions       randomDeletes       839.0 +- 11.6 ms
 
 SparseArray         frontAndBack        104.6 +- 6.8 ms
-SparseText          frontAndBack        135.5 +- 3.2 ms
-SparseIndexes       frontAndBack        81.0 +- 6.3 ms
+SparseString          frontAndBack        135.5 +- 3.2 ms
+SparseIndices       frontAndBack        81.0 +- 6.3 ms
 SparseArrayDirect   frontAndBack        172.7 +- 2.6 ms
 SparseArrayPairs    frontAndBack        147.7 +- 5.6 ms
 SparseArrayAltern   frontAndBack        138.7 +- 5.5 ms
@@ -39,8 +39,8 @@ PlainArray2         frontAndBack        95.9 +- 6.1 ms
 ListPositions       frontAndBack        590.1 +- 5.9 ms
 
 SparseArray         martinTrace         63.5 +- 5.6 ms
-SparseText          martinTrace         67.3 +- 8.6 ms
-SparseIndexes       martinTrace         48.4 +- 11.6 ms
+SparseString          martinTrace         67.3 +- 8.6 ms
+SparseIndices       martinTrace         48.4 +- 11.6 ms
 SparseArrayDirect   martinTrace         83.8 +- 5.0 ms
 SparseArrayPairs    martinTrace         89.5 +- 8.0 ms
 SparseArrayAltern   martinTrace         78.4 +- 5.5 ms

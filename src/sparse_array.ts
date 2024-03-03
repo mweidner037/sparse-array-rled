@@ -6,9 +6,7 @@ import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
 export type SerializedSparseArray<T> = Array<T[] | number>;
 
 export interface ArraySlicer<T> {
-  nextSlice(
-    endIndex: number | null
-  ): IterableIterator<[index: number, values: T[]]>;
+  nextSlice(endIndex: number | null): Array<[index: number, values: T[]]>;
 }
 
 export class SparseArray<T> extends SparseItems<T[]> {
