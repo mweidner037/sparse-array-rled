@@ -1,4 +1,5 @@
 import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
+import { checkIndex } from "./util";
 
 /**
  * See SparseIndices.serialize.
@@ -20,6 +21,8 @@ export interface IndicesSlicer {
    *
    * The first call starts at index 0. To end at the end of the array,
    * set `endIndex = null`.
+   *
+   * @throws If endIndex is less than the previous index.
    */
   nextSlice(endIndex: number | null): Array<[index: number, count: number]>;
 }
@@ -36,14 +39,19 @@ export class SparseIndices extends SparseItems<number> {
    * Returns a new, empty SparseIndices.
    *
    * @param length The initial length of the array.
+   *
+   * @throws If `length < 0`.
    */
   static new(length = 0): SparseIndices {
+    checkIndex(length, "length");
     return new this([], length);
   }
 
   /**
    * Returns a new SparseIndices by deserializing the given state
    * from `SparseIndices.serialize`.
+   *
+   * @throws If the serialized form is invalid (see `SparseIndices.serialize`).
    */
   static deserialize(serialized: SerializedSparseIndices): SparseIndices {
     return new this(...deserializeItems(serialized, indexesItemer));
@@ -74,6 +82,7 @@ export class SparseIndices extends SparseItems<number> {
       if (index === curLength && pairs.length !== 0) {
         pairs[pairs.length - 1].item++;
       } else {
+        checkIndex(index);
         pairs.push({ index, item: 1 });
       }
       curLength = index + 1;
@@ -159,6 +168,13 @@ export class SparseIndices extends SparseItems<number> {
 }
 
 const indexesItemer: Itemer<number> = {
+  isValid(allegedItem: unknown, emptyOkay: boolean): boolean {
+    return (
+      Number.isSafeInteger(allegedItem) &&
+      (<number>allegedItem > 0 || (emptyOkay && allegedItem === 0))
+    );
+  },
+
   newEmpty(): number {
     return 0;
   },

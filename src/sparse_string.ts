@@ -1,4 +1,5 @@
 import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
+import { checkIndex } from "./util";
 
 /**
  * See SparseString.serialize.
@@ -21,6 +22,8 @@ export interface StringSlicer {
    *
    * The first call starts at index 0. To end at the end of the array,
    * set `endIndex = null`.
+   *
+   * @throws If endIndex is less than the previous index.
    */
   nextSlice(endIndex: number | null): Array<[index: number, chars: string]>;
 }
@@ -41,14 +44,19 @@ export class SparseString extends SparseItems<string> {
    * Returns a new, empty SparseString.
    *
    * @param length The initial length of the string.
+   *
+   * @throws If `length < 0`.
    */
   static new(length = 0): SparseString {
+    checkIndex(length, "length");
     return new this([], length);
   }
 
   /**
    * Returns a new SparseString by deserializing the given state
    * from `SparseString.serialize`.
+   *
+   * @throws If the serialized form is invalid (see `SparseString.serialize`).
    */
   static deserialize(serialized: SerializedSparseString): SparseString {
     return new this(...deserializeItems(serialized, stringItemer));
@@ -82,6 +90,7 @@ export class SparseString extends SparseItems<string> {
       if (index === curLength && pairs.length !== 0) {
         pairs[pairs.length - 1].item += char;
       } else {
+        checkIndex(index);
         pairs.push({ index, item: char });
       }
       curLength = index + 1;
@@ -209,6 +218,12 @@ export class SparseString extends SparseItems<string> {
 }
 
 const stringItemer: Itemer<string> = {
+  isValid(allegedItem: unknown, emptyOkay: boolean): boolean {
+    return (
+      typeof allegedItem === "string" && (allegedItem.length !== 0 || emptyOkay)
+    );
+  },
+
   newEmpty(): string {
     return "";
   },

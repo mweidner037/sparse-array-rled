@@ -1,4 +1,4 @@
-import { nonNull } from "./util";
+import { checkIndex, nonNull } from "./util";
 
 /**
  * SparseItem's state is represented as an array of pairs { index, item },
@@ -15,6 +15,12 @@ export interface Pair<I> {
  * Item-type-specific functions used by SparseItems.
  */
 export interface Itemer<I> {
+  /**
+   * Return whether it could actually be an item. Called on user-provided
+   * serialized states, which could be corrupt.
+   */
+  isValid(allegedItem: unknown, emptyOkay: boolean): boolean;
+
   /**
    * Returns a new empty item.
    */
@@ -173,6 +179,8 @@ export abstract class SparseItems<I> {
   }
 
   set length(newLength: number) {
+    checkIndex(newLength, "length");
+
     if (newLength < this._length) {
       this._delete(newLength, this._length - newLength);
     }
@@ -196,8 +204,22 @@ export abstract class SparseItems<I> {
 
   /**
    * Returns the number of present values within the slice [startIndex, endIndex).
+   *
+   * @throws If `startIndex < 0` or `endIndex < startIndex`. (It is okay for
+   * either index to exceed `this.length`.)
    */
   countBetween(startIndex: number, endIndex: number): number {
+    if (
+      !Number.isSafeInteger(startIndex) ||
+      !Number.isSafeInteger(endIndex) ||
+      startIndex < 0 ||
+      endIndex < startIndex
+    ) {
+      throw new Error(
+        `Invalid slice: startIndex=${startIndex}, endIndex=${endIndex}`
+      );
+    }
+
     if (this._normalItem !== null) {
       const normalItemLength = this.itemer().length(this._normalItem);
       return (
@@ -226,8 +248,12 @@ export abstract class SparseItems<I> {
    * the `c`-th present value (or would be if present).
    *
    * Invert with findCount.
+   *
+   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
   countAt(index: number): [count: number, has: boolean] {
+    checkIndex(index);
+
     // count "of" index = # present values before index.
     let count = 0;
     for (const pair of nonNull(this._pairs)) {
@@ -256,9 +282,11 @@ export abstract class SparseItems<I> {
 
   /**
    * Returns the value at index, in the form [item, offset within item].
+   *
+   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
   protected _get(index: number): [item: I, offset: number] | null {
-    if (index < 0) throw new Error(`Invalid index: ${index}`);
+    checkIndex(index);
 
     if (this._normalItem !== null) {
       if (index < this.itemer().length(this._normalItem)) {
@@ -279,7 +307,7 @@ export abstract class SparseItems<I> {
   /**
    * Returns whether index is present in the array.
    *
-   * No error is thrown for index >= this.length.
+   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
   has(index: number): boolean {
     return this._get(index) !== null;
@@ -296,11 +324,16 @@ export abstract class SparseItems<I> {
    *
    * @param startIndex Index to start searching. If specified, only indices >= startIndex
    * contribute towards `count`.
+   *
+   * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
    */
   _findCount(
     count: number,
     startIndex = 0
   ): [index: number, item: I, offset: number] | null {
+    checkIndex(count, "count");
+    checkIndex(startIndex, "startIndex");
+
     if (this._normalItem !== null) {
       const index = startIndex + count;
       return index < this.itemer().length(this._normalItem)
@@ -423,8 +456,13 @@ export abstract class SparseItems<I> {
    *
    * @returns A sparse array of the previous values.
    * Index 0 in the returned array corresponds to `index` in this array.
+   *
+   * @throws If `index < 0` or `count < 0`. (It is okay if the range extends beyond `this.length`.)
    */
   protected _delete(index: number, count: number): this {
+    checkIndex(index);
+    checkIndex(count, "count");
+
     // Update length to "touch" [index, index + count), even if count is 0.
     // TODO: instead, match Array's behavior: if this deletes up to the current _length,
     // reduce _length.
@@ -541,8 +579,12 @@ export abstract class SparseItems<I> {
    *
    * @returns A sparse array of the previous values.
    * Index 0 in the returned array corresponds to `index` in this array.
+   *
+   * @throws If `index < 0`. (It is okay if the range extends beyond `this.length`.)
    */
   protected _set(index: number, item: I): this {
+    checkIndex(index);
+
     const count = this.itemer().length(item);
 
     // Update length to "touch" [index, index + count), even if count is 0.
@@ -704,12 +746,18 @@ export function deserializeItems<I>(
   for (let j = 0; j < serialized.length; j++) {
     if (j % 2 === 0) {
       const item = serialized[j] as I;
+      if (!itemer.isValid(item, j === 0)) {
+        throw new Error(`Invalid item at serialized[${j}]: ${item}`);
+      }
       const itemLength = itemer.length(item);
       if (itemLength === 0) continue;
       pairs.push({ index: nextIndex, item: itemer.slice(item) });
       nextIndex += itemLength;
     } else {
       const deleted = serialized[j] as number;
+      if (!Number.isSafeInteger(deleted) || deleted <= 0) {
+        throw new Error(`Invalid delete count at serialized[${j}]: ${deleted}`);
+      }
       nextIndex += deleted;
     }
   }
@@ -723,13 +771,39 @@ export function deserializeItems<I>(
 class PairSlicer<I> implements ItemSlicer<I> {
   private i = 0;
   private offset = 0;
+  private prevEnd: number | null = 0;
 
   constructor(
     private readonly itemer: Itemer<I>,
     private readonly pairs: readonly Pair<I>[]
   ) {}
 
+  /**
+   * Returns an array of items in the next slice,
+   * continuing from the previous index (inclusive) to endIndex (exclusive).
+   *
+   * Each item [index, item] indicates a present item starting at index,
+   * ending at either endIndex or a deleted index.
+   *
+   * The first call starts at index 0. To end at the end of the array,
+   * set `endIndex = null`.
+   *
+   * @throws If endIndex is less than the previous index.
+   */
   nextSlice(endIndex: number | null): Array<[index: number, item: I]> {
+    if (endIndex !== null) {
+      if (
+        !Number.isSafeInteger(endIndex) ||
+        this.prevEnd === null ||
+        endIndex < this.prevEnd
+      ) {
+        throw new Error(
+          `Invalid endIndex: ${endIndex} (previous endIndex: ${this.prevEnd})`
+        );
+      }
+    }
+    this.prevEnd = endIndex;
+
     const ret: Array<[index: number, item: I]> = [];
 
     while (this.i < this.pairs.length) {

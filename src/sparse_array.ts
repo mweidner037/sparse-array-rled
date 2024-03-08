@@ -1,4 +1,5 @@
 import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
+import { checkIndex } from "./util";
 
 /**
  * See SparseArray.serialize.
@@ -20,6 +21,8 @@ export interface ArraySlicer<T> {
    *
    * The first call starts at index 0. To end at the end of the array,
    * set `endIndex = null`.
+   *
+   * @throws If endIndex is less than the previous index.
    */
   nextSlice(endIndex: number | null): Array<[index: number, values: T[]]>;
 }
@@ -50,8 +53,11 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * Returns a new, empty SparseArray.
    *
    * @param length The initial length of the array.
+   *
+   * @throws If `length < 0`.
    */
   static new<T>(length = 0): SparseArray<T> {
+    checkIndex(length, "length");
     return new this([], length);
   }
 
@@ -60,6 +66,8 @@ export class SparseArray<T> extends SparseItems<T[]> {
   /**
    * Returns a new SparseArray by deserializing the given state
    * from `SparseArray.serialize`.
+   *
+   * @throws If the serialized form is invalid (see `SparseArray.serialize`).
    */
   static deserialize<T>(serialized: SerializedSparseArray<T>): SparseArray<T> {
     return new this(
@@ -95,6 +103,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
       if (index === curLength && pairs.length !== 0) {
         pairs[pairs.length - 1].item.push(value);
       } else {
+        checkIndex(index);
         pairs.push({ index, item: [value] });
       }
       curLength = index + 1;
@@ -220,6 +229,12 @@ export class SparseArray<T> extends SparseItems<T[]> {
 }
 
 const arrayItemer: Itemer<unknown[]> = {
+  isValid(allegedItem: unknown, emptyOkay: boolean): boolean {
+    return (
+      Array.isArray(allegedItem) && (allegedItem.length !== 0 || emptyOkay)
+    );
+  },
+
   newEmpty(): unknown[] {
     return [];
   },
