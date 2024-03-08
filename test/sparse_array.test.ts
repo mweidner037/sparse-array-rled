@@ -56,14 +56,10 @@ function check(arr: SparseArray<string>, values: (string | null)[]) {
       assert.deepStrictEqual(info, [true, values[i]!]);
       beforeCount++;
     }
+    assert.strictEqual(arr.has(i), values[i] !== null);
+    assert.strictEqual(arr.get(i), values[i] ?? undefined);
   }
   assert.strictEqual(arr.length, values.length);
-
-  assert.strictEqual(
-    arr.count(),
-    values.filter((value) => value != null).length,
-    "count"
-  );
   assert.isAtLeast(arr.length, getPresentLength(state));
 
   // getInfo should also work on indexes past the length.
@@ -88,6 +84,18 @@ function entriesAsItems<T>(
   }
 
   return pairs.map(({ index, item }) => [index, item]);
+}
+
+function countBetween(
+  values: (string | null)[],
+  startIndex: number,
+  endIndex: number
+): number {
+  let ans = 0;
+  for (let i = startIndex; i < Math.min(endIndex, values.length); i++) {
+    if (values[i] !== null) ans++;
+  }
+  return ans;
 }
 
 class Checker {
@@ -184,30 +192,69 @@ class Checker {
    * in "interesting" states.
    */
   testQueries(rng: seedrandom.PRNG) {
-    // Test findCountIndex.
-    for (let startIndex = 0; startIndex < this.values.length; startIndex++) {
-      for (let count = 0; ; count++) {
+    // Test entries, keys.
+    const entries = [...this.arr.entries()];
+    const keys = [...this.arr.keys()];
+    let nextEntry = 0;
+    for (let i = 0; i < this.values.length; i++) {
+      if (this.values[i] !== null) {
+        assert.deepStrictEqual(entries[nextEntry], [i, this.values[i]]);
+        assert.deepStrictEqual(keys[nextEntry], i);
+        nextEntry++;
+      }
+    }
+    assert.strictEqual(nextEntry, entries.length);
+
+    // Test fromEntries.
+    const arr2 = SparseArray.fromEntries(entries, this.arr.length);
+    check(arr2, this.values);
+
+    // Test findCount.
+    for (
+      let startIndex = 0;
+      startIndex < this.values.length + 2;
+      startIndex++
+    ) {
+      for (let count = 0; count < this.values.length + 2; count++) {
         // Find the count-th present value starting at startIndex, in values.
         let remaining = count;
         let index = startIndex;
         for (; index < this.values.length; index++) {
           if (this.values[index] !== null) {
-            remaining--;
             if (remaining === 0) break;
+            remaining--;
           }
         }
-        if (index === this.values.length) {
-          // count is too large; go to the next startIndex.
-          break;
+        if (index >= this.values.length) {
+          // count is too large - not found.
+          assert.deepStrictEqual(this.arr.findCount(startIndex, count), null);
         } else {
           // Answer is i.
-          assert.strictEqual(this.arr.findCount(startIndex, count), [
+          assert.deepStrictEqual(this.arr.findCount(startIndex, count), [
             index,
             this.values[index],
           ]);
         }
       }
     }
+
+    // Test count*.
+    const valuesCount = countBetween(this.values, 0, this.values.length);
+    assert.strictEqual(this.arr.count(), valuesCount);
+    assert.strictEqual(this.arr.isEmpty(), valuesCount === 0);
+    for (let i = 0; i < this.values.length + 2; i++) {
+      assert.deepStrictEqual(this.arr.countAt(i), [
+        countBetween(this.values, 0, i),
+        i < this.values.length && this.values[i] !== null,
+      ]);
+      for (let j = i; j < this.values.length + 2; j++) {
+        assert.strictEqual(
+          this.arr.countBetween(i, j),
+          countBetween(this.values, i, j)
+        );
+      }
+    }
+
     // Test newSlicer 10x with random slices.
     for (let trial = 0; trial < 10; trial++) {
       const slicer = this.arr.newSlicer();
@@ -391,17 +438,16 @@ describe("SparseArray", () => {
             preparer.set(i, [String.fromCharCode(65 + i)]);
           }
         }
-        const preparedState = preparer.serialize();
+        preparer.testQueries(rng);
 
         // Perform each reasonable set/delete on the array.
+        const preparedState = preparer.serialize();
         for (let index = 0; index < ALL_LENGTH + 2; index++) {
           for (let count = 0; count < ALL_LENGTH + 2; count++) {
             for (const op of ["set", "delete"] as const) {
               const checker = new Checker(preparedState);
               if (op === "set") preparer.set(index, new Array(count).fill("z"));
               else checker.delete(index, count);
-
-              checker.testQueries(rng);
             }
           }
         }

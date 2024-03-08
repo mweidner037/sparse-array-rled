@@ -254,6 +254,12 @@ export abstract class SparseItems<I> {
   countAt(index: number): [count: number, has: boolean] {
     checkIndex(index);
 
+    if (this._normalItem !== null) {
+      const normalItemLength = this.itemer().length(this._normalItem);
+      if (index < normalItemLength) return [index, true];
+      else return [normalItemLength, false];
+    }
+
     // count "of" index = # present values before index.
     let count = 0;
     for (const pair of nonNull(this._pairs)) {
