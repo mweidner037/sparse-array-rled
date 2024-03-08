@@ -327,7 +327,7 @@ export abstract class SparseItems<I> {
    *
    * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
    */
-  _findCount(
+  protected _findCount(
     count: number,
     startIndex = 0
   ): [index: number, item: I, offset: number] | null {

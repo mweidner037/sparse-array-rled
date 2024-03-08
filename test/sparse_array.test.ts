@@ -1,7 +1,7 @@
 import { assert } from "chai";
 import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
-import { SparseArray } from "../src";
+import { SerializedSparseArray, SparseArray } from "../src";
 import { Pair } from "../src/sparse_items";
 
 const DEBUG = false;
@@ -94,9 +94,19 @@ class Checker {
   readonly arr: SparseArray<string>;
   values: (string | null)[];
 
-  constructor() {
-    this.arr = SparseArray.new();
-    this.values = [];
+  constructor(serialized?: [SerializedSparseArray<string>, (string | null)[]]) {
+    if (serialized !== undefined) {
+      this.arr = SparseArray.deserialize(serialized[0]);
+      this.values = [...serialized[1]];
+      this.check();
+    } else {
+      this.arr = SparseArray.new();
+      this.values = [];
+    }
+  }
+
+  serialize(): [SerializedSparseArray<string>, (string | null)[]] {
+    return [this.arr.serialize(), [...this.values]];
   }
 
   check() {
@@ -361,10 +371,41 @@ describe("SparseArray", () => {
       }
     });
 
-    // test("first deleted", () => {
-    //   // Values [null, "x"].
-    //   const [items] = man.set(man.new(), 1, ["x"]);
-    //   assert.strictEqual(man.findCountIndex(items, 0, 0), 1);
-    // });
+    test("first deleted", () => {
+      // Values [null, "x"].
+      const arr = SparseArray.new();
+      arr.set(1, "x");
+      assert.deepStrictEqual(arr.findCount(0), [1, "x"]);
+    });
+
+    const ALL_LENGTH = 7;
+    test(`all ${ALL_LENGTH}-length ops`, function () {
+      // Generous timeout (5x what my laptop needs).
+      this.timeout(45000);
+
+      // Generate each possible array outline of length <= ALL_LENGTH.
+      for (let a = 0; a < Math.pow(2, ALL_LENGTH); a++) {
+        const preparer = new Checker();
+        for (let i = 0; i < ALL_LENGTH; i++) {
+          if ((a & (1 << i)) !== 0) {
+            preparer.set(i, [String.fromCharCode(65 + i)]);
+          }
+        }
+        const preparedState = preparer.serialize();
+
+        // Perform each reasonable set/delete on the array.
+        for (let index = 0; index < ALL_LENGTH + 2; index++) {
+          for (let count = 0; count < ALL_LENGTH + 2; count++) {
+            for (const op of ["set", "delete"] as const) {
+              const checker = new Checker(preparedState);
+              if (op === "set") preparer.set(index, new Array(count).fill("z"));
+              else checker.delete(index, count);
+
+              checker.testQueries(rng);
+            }
+          }
+        }
+      }
+    });
   });
 });
