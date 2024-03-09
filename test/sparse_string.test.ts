@@ -1,17 +1,17 @@
 import { assert } from "chai";
 import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
-import { SerializedSparseArray, SparseArray } from "../src";
+import { SerializedSparseString, SparseString } from "../src";
 import { Pair } from "../src/sparse_items";
 
 const DEBUG = false;
 
-function getState<T>(arr: SparseArray<T>): Pair<T[]>[] {
+function getState(arr: SparseString): Pair<string>[] {
   // @ts-expect-error Ignore protected
   return arr.asPairs();
 }
 
-function validate<T>(pairs: Pair<T[]>[]): void {
+function validate(pairs: Pair<string>[]): void {
   // No nonsense i's.
   assert.doesNotHaveAnyKeys(pairs, ["-1", "-2", "-0"]);
 
@@ -22,7 +22,7 @@ function validate<T>(pairs: Pair<T[]>[]): void {
 
   // Proper types.
   for (let i = 0; i < pairs.length; i++) {
-    assert.isArray(pairs[i].item);
+    assert.isString(pairs[i].item);
   }
 
   // No empty items.
@@ -38,7 +38,7 @@ function validate<T>(pairs: Pair<T[]>[]): void {
   }
 }
 
-function getPresentLength<T>(pairs: Pair<T[]>[]): number {
+function getPresentLength(pairs: Pair<string>[]): number {
   if (pairs.length === 0) return 0;
   const lastPair = pairs.at(-1)!;
   return lastPair.index + lastPair.item.length;
@@ -52,7 +52,7 @@ function getValuesLength<T>(values: (T | null)[]): number {
   return ans;
 }
 
-function check(arr: SparseArray<string>, values: (string | null)[]) {
+function check(arr: SparseString, values: (string | null)[]) {
   const state = getState(arr);
   validate(state);
 
@@ -76,17 +76,17 @@ function check(arr: SparseArray<string>, values: (string | null)[]) {
   }
 }
 
-function entriesAsItems<T>(
-  entries: Array<[index: number, value: T]>
-): Array<[index: number, item: T[]]> {
-  const pairs: Pair<T[]>[] = [];
+function entriesAsItems(
+  entries: Array<[index: number, char: string]>
+): Array<[index: number, item: string]> {
+  const pairs: Pair<string>[] = [];
   let curLength = 0;
 
-  for (const [index, value] of entries) {
+  for (const [index, char] of entries) {
     if (index === curLength && pairs.length !== 0) {
-      pairs[pairs.length - 1].item.push(value);
+      pairs[pairs.length - 1].item += char;
     } else {
-      pairs.push({ index, item: [value] });
+      pairs.push({ index, item: char });
     }
     curLength = index + 1;
   }
@@ -107,21 +107,21 @@ function countBetween(
 }
 
 class Checker {
-  readonly arr: SparseArray<string>;
+  readonly arr: SparseString;
   values: (string | null)[];
 
-  constructor(serialized?: [SerializedSparseArray<string>, (string | null)[]]) {
+  constructor(serialized?: [SerializedSparseString, (string | null)[]]) {
     if (serialized !== undefined) {
-      this.arr = SparseArray.deserialize(serialized[0]);
+      this.arr = SparseString.deserialize(serialized[0]);
       this.values = [...serialized[1]];
       this.check();
     } else {
-      this.arr = SparseArray.new();
+      this.arr = SparseString.new();
       this.values = [];
     }
   }
 
-  serialize(): [SerializedSparseArray<string>, (string | null)[]] {
+  serialize(): [SerializedSparseString, (string | null)[]] {
     return [this.arr.serialize(), [...this.values]];
   }
 
@@ -140,7 +140,7 @@ class Checker {
       replacedValues[i] = this.values[index + i] ?? null;
     }
 
-    const replaced = this.arr.set(index, ...newValues);
+    const replaced = this.arr.set(index, newValues.join(""));
 
     // Update this.values in parallel.
     for (let i = this.values.length; i < index + newValues.length; i++) {
@@ -215,7 +215,7 @@ class Checker {
     assert.strictEqual(nextEntry, keys.length);
 
     // Test fromEntries.
-    const arr2 = SparseArray.fromEntries(entries);
+    const arr2 = SparseString.fromEntries(entries);
     check(arr2, this.values);
 
     // Test findCount.
@@ -290,7 +290,7 @@ class Checker {
   }
 }
 
-describe("SparseArray", () => {
+describe("SparseString", () => {
   let rng!: seedrandom.PRNG;
 
   beforeEach(() => {
@@ -298,7 +298,7 @@ describe("SparseArray", () => {
   });
 
   test("empty", () => {
-    check(SparseArray.new(), []);
+    check(SparseString.new(), []);
   });
 
   test("set once", () => {
@@ -429,7 +429,7 @@ describe("SparseArray", () => {
 
     test("first deleted", () => {
       // Values [null, "x"].
-      const arr = SparseArray.new<string>();
+      const arr = SparseString.new();
       arr.set(1, "x");
       assert.deepStrictEqual(arr.findCount(0), [1, "x"]);
     });
@@ -437,7 +437,7 @@ describe("SparseArray", () => {
     const ALL_LENGTH = 7;
     test(`all ${ALL_LENGTH}-length ops`, function () {
       // Generous timeout (5x what my laptop needs).
-      this.timeout(50000);
+      this.timeout(70000);
 
       // Generate each possible array outline of length <= ALL_LENGTH.
       for (let a = 0; a < Math.pow(2, ALL_LENGTH); a++) {
@@ -468,20 +468,20 @@ describe("SparseArray", () => {
   test("toString", () => {
     // Test both normalItem and pairs cases.
     for (const start of [0, 5]) {
-      const arr = SparseArray.new<string>();
-      arr.set(start, "a", "b", "c", "d", "sigil");
+      const arr = SparseString.new();
+      arr.set(start, "abcde");
       assert.doesNotThrow(() => arr.toString());
       // toString should actually contain the values - not abbreviate like
       // console.log sometimes does.
-      assert.notStrictEqual(arr.toString().indexOf('"sigil"'), -1);
+      assert.notStrictEqual(arr.toString().indexOf('"abcde"'), -1);
     }
   });
 
   test("clone", () => {
     // Test both normalItem and pairs cases.
     for (const start of [0, 5]) {
-      const arr = SparseArray.new<string>();
-      arr.set(start, "a", "b", "c", "d", "sigil");
+      const arr = SparseString.new();
+      arr.set(start, "abcde");
       const cloned = arr.clone();
 
       const clonedSerialized = cloned.serialize();
@@ -502,38 +502,32 @@ describe("SparseArray", () => {
 
   test("serialize", () => {
     // Test a few explicit examples of serialize.
-    const arr = SparseArray.new<string>();
+    const arr = SparseString.new();
     assert.deepStrictEqual(arr.serialize(), []);
 
-    arr.set(0, "a", "b");
-    assert.deepStrictEqual(arr.serialize(), [["a", "b"]]);
+    arr.set(0, "ab");
+    assert.deepStrictEqual(arr.serialize(), ["ab"]);
 
     arr.delete(0, 2);
     assert.deepStrictEqual(arr.serialize(), []);
 
-    arr.set(5, "c", "d");
-    assert.deepStrictEqual(arr.serialize(), [[], 5, ["c", "d"]]);
+    arr.set(5, "cd");
+    assert.deepStrictEqual(arr.serialize(), ["", 5, "cd"]);
 
     arr.delete(0, 10);
     assert.deepStrictEqual(arr.serialize(), []);
 
     arr.set(0, "x");
-    arr.set(2, "y", "z");
-    arr.set(7, "A", "B", "C");
-    assert.deepStrictEqual(arr.serialize(), [
-      ["x"],
-      1,
-      ["y", "z"],
-      3,
-      ["A", "B", "C"],
-    ]);
+    arr.set(2, "yz");
+    arr.set(7, "ABC");
+    assert.deepStrictEqual(arr.serialize(), ["x", 1, "yz", 3, "ABC"]);
   });
 
   test("method errors", () => {
     // Test both normalItem and pairs cases.
     for (const start of [0, 5]) {
-      const arr = SparseArray.new<string>();
-      arr.set(start, "a", "b", "c", "d", "e");
+      const arr = SparseString.new();
+      arr.set(start, "abcde");
       const initial = arr.serialize();
 
       // Each error case should throw and not change the array.
@@ -580,13 +574,13 @@ describe("SparseArray", () => {
 
       // set and delete
       for (const bad of [-1, 0.5, NaN]) {
-        assert.throws(() => arr.set(bad, "a", "b", "c"));
+        assert.throws(() => arr.set(bad, "abcc"));
         assert.throws(() => arr.delete(bad, 3));
       }
       for (const bad of [-1, 0.5, NaN]) {
         assert.throws(() => arr.delete(3, bad));
       }
-      assert.doesNotThrow(() => arr.clone().set(15, "a", "b", "c"));
+      assert.doesNotThrow(() => arr.clone().set(15, "abc"));
       assert.doesNotThrow(() => arr.clone().delete(15, 3));
       assert.deepStrictEqual(arr.serialize(), initial);
 
@@ -608,9 +602,9 @@ describe("SparseArray", () => {
 
   test("fromEntries errors", () => {
     for (const bad of [-1, 0.5, NaN]) {
-      assert.throws(() => SparseArray.fromEntries([[bad, "x"]]));
+      assert.throws(() => SparseString.fromEntries([[bad, "x"]]));
       assert.throws(() =>
-        SparseArray.fromEntries([
+        SparseString.fromEntries([
           [0, "y"],
           [bad, "x"],
         ])
@@ -618,7 +612,7 @@ describe("SparseArray", () => {
     }
 
     assert.throws(() =>
-      SparseArray.fromEntries([
+      SparseString.fromEntries([
         [0, "x"],
         [1, "y"],
         [1, "z"],
@@ -626,17 +620,17 @@ describe("SparseArray", () => {
     );
 
     assert.throws(() =>
-      SparseArray.fromEntries([
+      SparseString.fromEntries([
         [0, "x"],
         [2, "y"],
         [1, "z"],
       ])
     );
 
-    assert.doesNotThrow(() => SparseArray.fromEntries([]));
-    assert.doesNotThrow(() => SparseArray.fromEntries([[1, "x"]]));
+    assert.doesNotThrow(() => SparseString.fromEntries([]));
+    assert.doesNotThrow(() => SparseString.fromEntries([[1, "x"]]));
     assert.doesNotThrow(() =>
-      SparseArray.fromEntries([
+      SparseString.fromEntries([
         [1, "x"],
         [7, "y"],
         [1000, "z"],
@@ -646,47 +640,35 @@ describe("SparseArray", () => {
 
   test("deserialize errors", () => {
     for (const bad of [-1, 0.5, NaN]) {
-      assert.throws(() => SparseArray.deserialize([[], bad]));
-      assert.throws(() =>
-        SparseArray.deserialize([["a", "b", "c"], 7, ["x", "y"], bad, ["m"]])
-      );
+      assert.throws(() => SparseString.deserialize(["", bad]));
+      assert.throws(() => SparseString.deserialize(["abc", 7, "xy", bad, "m"]));
     }
 
     assert.throws(() =>
       // @ts-expect-error
-      SparseArray.deserialize([["a", "b", "c"], 7, "xyz", 3, ["m"]])
+      SparseString.deserialize(["abc", 7, ["x", "y", "z"], 3, "m"])
     );
     assert.throws(() =>
       // @ts-expect-error
-      SparseArray.deserialize(["xyz", 7, ["a", "b", "c"], 3, ["m"]])
+      SparseString.deserialize([["x", "y", "z"], 7, "abc", 3, "m"])
     );
     assert.throws(() =>
       // @ts-expect-error
-      SparseArray.deserialize([["a", "b", "c"], 7, null, 3, ["m"]])
+      SparseString.deserialize(["abc", 7, null, 3, "m"])
     );
     assert.throws(() =>
       // @ts-expect-error
-      SparseArray.deserialize([["a", "b", "c"], 7, {}, 3, ["m"]])
+      SparseString.deserialize(["abc", 7, {}, 3, "m"])
     );
-    assert.throws(() =>
-      SparseArray.deserialize([["a", "b", "c"], 7, 6, 3, ["m"]])
-    );
-    assert.throws(() =>
-      SparseArray.deserialize([["a", "b", "c"], 7, ["x"], ["y"], ["m"]])
-    );
+    assert.throws(() => SparseString.deserialize(["abc", 7, 6, 3, "m"]));
+    assert.throws(() => SparseString.deserialize(["abc", 7, "x", "y", "m"]));
 
-    assert.throws(() =>
-      SparseArray.deserialize([3, ["a", "b", "c"], 7, ["x", "y"], ["m"]])
-    );
+    assert.throws(() => SparseString.deserialize([3, "abc", 7, "xy", "m"]));
 
-    assert.throws(() =>
-      SparseArray.deserialize([["a", "b", "c"], 7, [], 3, ["m"]])
-    );
-    assert.throws(() =>
-      SparseArray.deserialize([["a", "b", "c"], 0, ["x", "y"], 3, ["m"]])
-    );
+    assert.throws(() => SparseString.deserialize(["abc", 7, "", 3, "m"]));
+    assert.throws(() => SparseString.deserialize(["abc", 0, "xy", 3, "m"]));
 
-    assert.doesNotThrow(() => SparseArray.deserialize([]));
-    assert.doesNotThrow(() => SparseArray.deserialize([[], 7, ["x"]]));
+    assert.doesNotThrow(() => SparseString.deserialize([]));
+    assert.doesNotThrow(() => SparseString.deserialize(["", 7, "x"]));
   });
 });

@@ -1,17 +1,17 @@
 import { assert } from "chai";
 import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
-import { SerializedSparseArray, SparseArray } from "../src";
+import { SerializedSparseIndices, SparseIndices } from "../src";
 import { Pair } from "../src/sparse_items";
 
 const DEBUG = false;
 
-function getState<T>(arr: SparseArray<T>): Pair<T[]>[] {
+function getState(arr: SparseIndices): Pair<number>[] {
   // @ts-expect-error Ignore protected
   return arr.asPairs();
 }
 
-function validate<T>(pairs: Pair<T[]>[]): void {
+function validate(pairs: Pair<number>[]): void {
   // No nonsense i's.
   assert.doesNotHaveAnyKeys(pairs, ["-1", "-2", "-0"]);
 
@@ -22,26 +22,30 @@ function validate<T>(pairs: Pair<T[]>[]): void {
 
   // Proper types.
   for (let i = 0; i < pairs.length; i++) {
-    assert.isArray(pairs[i].item);
+    assert(
+      Number.isSafeInteger(pairs[i].item),
+      `Not a safe integer: ${pairs[i].item}`
+    );
+    assert.isAtLeast(pairs[i].item, 0);
   }
 
   // No empty items.
   for (let i = 0; i < pairs.length; i++) {
-    assert.notStrictEqual(pairs[i].item.length, 0);
+    assert.notStrictEqual(pairs[i].item, 0);
   }
 
   // No overlapping or joinable segments.
   for (let i = 0; i < pairs.length - 1; i++) {
-    const thisEnd = pairs[i].index + pairs[i].item.length;
+    const thisEnd = pairs[i].index + pairs[i].item;
     const nextStart = pairs[i + 1].index;
     assert.isBelow(thisEnd, nextStart);
   }
 }
 
-function getPresentLength<T>(pairs: Pair<T[]>[]): number {
+function getPresentLength(pairs: Pair<number>[]): number {
   if (pairs.length === 0) return 0;
   const lastPair = pairs.at(-1)!;
-  return lastPair.index + lastPair.item.length;
+  return lastPair.index + lastPair.item;
 }
 
 function getValuesLength<T>(values: (T | null)[]): number {
@@ -52,41 +56,33 @@ function getValuesLength<T>(values: (T | null)[]): number {
   return ans;
 }
 
-function check(arr: SparseArray<string>, values: (string | null)[]) {
+function check(arr: SparseIndices, values: (string | null)[]) {
   const state = getState(arr);
   validate(state);
 
   for (let i = 0; i < values.length; i++) {
-    const info = arr.hasGet(i);
-    if (values[i] === null) assert.deepStrictEqual(info, [false, undefined]);
-    else {
-      assert.deepStrictEqual(info, [true, values[i]!]);
-    }
     assert.strictEqual(arr.has(i), values[i] !== null);
-    assert.strictEqual(arr.get(i), values[i] ?? undefined);
   }
   assert.strictEqual(arr.length, getPresentLength(state));
   assert.strictEqual(arr.length, getValuesLength(values));
 
   // Queries should also work on indexes past the length.
   for (let i = 0; i < 10; i++) {
-    assert.deepStrictEqual(arr.hasGet(arr.length + i), [false, undefined]);
     assert.deepStrictEqual(arr.has(arr.length + i), false);
-    assert.deepStrictEqual(arr.get(arr.length + i), undefined);
   }
 }
 
-function entriesAsItems<T>(
-  entries: Array<[index: number, value: T]>
-): Array<[index: number, item: T[]]> {
-  const pairs: Pair<T[]>[] = [];
+function entriesAsItems(
+  entries: Array<[index: number, char: string]>
+): Array<[index: number, item: number]> {
+  const pairs: Pair<number>[] = [];
   let curLength = 0;
 
-  for (const [index, value] of entries) {
+  for (const [index, char] of entries) {
     if (index === curLength && pairs.length !== 0) {
-      pairs[pairs.length - 1].item.push(value);
+      pairs[pairs.length - 1].item += 1;
     } else {
-      pairs.push({ index, item: [value] });
+      pairs.push({ index, item: 1 });
     }
     curLength = index + 1;
   }
@@ -107,21 +103,21 @@ function countBetween(
 }
 
 class Checker {
-  readonly arr: SparseArray<string>;
+  readonly arr: SparseIndices;
   values: (string | null)[];
 
-  constructor(serialized?: [SerializedSparseArray<string>, (string | null)[]]) {
+  constructor(serialized?: [SerializedSparseIndices, (string | null)[]]) {
     if (serialized !== undefined) {
-      this.arr = SparseArray.deserialize(serialized[0]);
+      this.arr = SparseIndices.deserialize(serialized[0]);
       this.values = [...serialized[1]];
       this.check();
     } else {
-      this.arr = SparseArray.new();
+      this.arr = SparseIndices.new();
       this.values = [];
     }
   }
 
-  serialize(): [SerializedSparseArray<string>, (string | null)[]] {
+  serialize(): [SerializedSparseIndices, (string | null)[]] {
     return [this.arr.serialize(), [...this.values]];
   }
 
@@ -140,7 +136,7 @@ class Checker {
       replacedValues[i] = this.values[index + i] ?? null;
     }
 
-    const replaced = this.arr.set(index, ...newValues);
+    const replaced = this.arr.set(index, newValues.length);
 
     // Update this.values in parallel.
     for (let i = this.values.length; i < index + newValues.length; i++) {
@@ -201,21 +197,18 @@ class Checker {
    */
   testQueries(rng: seedrandom.PRNG) {
     // Test entries, keys.
-    const entries = [...this.arr.entries()];
     const keys = [...this.arr.keys()];
     let nextEntry = 0;
     for (let i = 0; i < this.values.length; i++) {
       if (this.values[i] !== null) {
-        assert.deepStrictEqual(entries[nextEntry], [i, this.values[i]]);
         assert.deepStrictEqual(keys[nextEntry], i);
         nextEntry++;
       }
     }
-    assert.strictEqual(nextEntry, entries.length);
     assert.strictEqual(nextEntry, keys.length);
 
-    // Test fromEntries.
-    const arr2 = SparseArray.fromEntries(entries);
+    // Test fromKeys.
+    const arr2 = SparseIndices.fromKeys(keys);
     check(arr2, this.values);
 
     // Test findCount.
@@ -239,10 +232,7 @@ class Checker {
           assert.deepStrictEqual(this.arr.findCount(count, startIndex), null);
         } else {
           // Answer is index.
-          assert.deepStrictEqual(this.arr.findCount(count, startIndex), [
-            index,
-            this.values[index],
-          ]);
+          assert.deepStrictEqual(this.arr.findCount(count, startIndex), index);
         }
       }
     }
@@ -290,7 +280,7 @@ class Checker {
   }
 }
 
-describe("SparseArray", () => {
+describe("SparseIndices", () => {
   let rng!: seedrandom.PRNG;
 
   beforeEach(() => {
@@ -298,7 +288,7 @@ describe("SparseArray", () => {
   });
 
   test("empty", () => {
-    check(SparseArray.new(), []);
+    check(SparseIndices.new(), []);
   });
 
   test("set once", () => {
@@ -429,15 +419,15 @@ describe("SparseArray", () => {
 
     test("first deleted", () => {
       // Values [null, "x"].
-      const arr = SparseArray.new<string>();
-      arr.set(1, "x");
-      assert.deepStrictEqual(arr.findCount(0), [1, "x"]);
+      const arr = SparseIndices.new();
+      arr.set(1, 1);
+      assert.deepStrictEqual(arr.findCount(0), 1);
     });
 
     const ALL_LENGTH = 7;
     test(`all ${ALL_LENGTH}-length ops`, function () {
       // Generous timeout (5x what my laptop needs).
-      this.timeout(50000);
+      this.timeout(30000);
 
       // Generate each possible array outline of length <= ALL_LENGTH.
       for (let a = 0; a < Math.pow(2, ALL_LENGTH); a++) {
@@ -468,72 +458,66 @@ describe("SparseArray", () => {
   test("toString", () => {
     // Test both normalItem and pairs cases.
     for (const start of [0, 5]) {
-      const arr = SparseArray.new<string>();
-      arr.set(start, "a", "b", "c", "d", "sigil");
+      const arr = SparseIndices.new();
+      arr.set(start, 5);
       assert.doesNotThrow(() => arr.toString());
       // toString should actually contain the values - not abbreviate like
       // console.log sometimes does.
-      assert.notStrictEqual(arr.toString().indexOf('"sigil"'), -1);
+      assert.notStrictEqual(arr.toString().indexOf("5"), -1);
     }
   });
 
   test("clone", () => {
     // Test both normalItem and pairs cases.
     for (const start of [0, 5]) {
-      const arr = SparseArray.new<string>();
-      arr.set(start, "a", "b", "c", "d", "sigil");
+      const arr = SparseIndices.new();
+      arr.set(start, 5);
       const cloned = arr.clone();
 
       const clonedSerialized = cloned.serialize();
       assert.deepStrictEqual(clonedSerialized, arr.serialize());
 
       // Mutations should be independent (no aliasing).
-      arr.set(7, "o");
-      arr.set(2, "a");
+      arr.set(7, 1);
+      arr.set(2, 1);
       assert.deepStrictEqual(cloned.serialize(), clonedSerialized);
 
       const arrSerialized = arr.serialize();
       cloned.delete(7, 1);
-      cloned.set(6, "d");
-      cloned.set(13, "u");
+      cloned.set(6, 1);
+      cloned.set(13, 1);
       assert.deepStrictEqual(arr.serialize(), arrSerialized);
     }
   });
 
   test("serialize", () => {
     // Test a few explicit examples of serialize.
-    const arr = SparseArray.new<string>();
+    const arr = SparseIndices.new();
     assert.deepStrictEqual(arr.serialize(), []);
 
-    arr.set(0, "a", "b");
-    assert.deepStrictEqual(arr.serialize(), [["a", "b"]]);
+    arr.set(0, 2);
+    assert.deepStrictEqual(arr.serialize(), [2]);
 
     arr.delete(0, 2);
     assert.deepStrictEqual(arr.serialize(), []);
 
-    arr.set(5, "c", "d");
-    assert.deepStrictEqual(arr.serialize(), [[], 5, ["c", "d"]]);
+    arr.set(5, 2);
+    assert.deepStrictEqual(arr.serialize(), [0, 5, 2]);
 
     arr.delete(0, 10);
     assert.deepStrictEqual(arr.serialize(), []);
 
-    arr.set(0, "x");
-    arr.set(2, "y", "z");
-    arr.set(7, "A", "B", "C");
-    assert.deepStrictEqual(arr.serialize(), [
-      ["x"],
-      1,
-      ["y", "z"],
-      3,
-      ["A", "B", "C"],
-    ]);
+    arr.set(0, 1);
+    arr.set(2, 2);
+    arr.set(7, 3);
+    assert.deepStrictEqual(arr.serialize(), [1, 1, 2, 3, 3]);
   });
 
   test("method errors", () => {
     // Test both normalItem and pairs cases.
     for (const start of [0, 5]) {
-      const arr = SparseArray.new<string>();
-      arr.set(start, "a", "b", "c", "d", "e");
+      const arr = SparseIndices.new();
+      arr.set(start, 5);
       const initial = arr.serialize();
 
       // Each error case should throw and not change the array.
@@ -560,12 +544,8 @@ describe("SparseArray", () => {
       // has etc.
       for (const bad of [-1, 0.5, NaN]) {
         assert.throws(() => arr.has(bad));
-        assert.throws(() => arr.get(bad));
-        assert.throws(() => arr.hasGet(bad));
       }
       assert.doesNotThrow(() => arr.has(18));
-      assert.doesNotThrow(() => arr.get(18));
-      assert.doesNotThrow(() => arr.hasGet(18));
       assert.deepStrictEqual(arr.serialize(), initial);
 
       // findCount
@@ -580,13 +560,13 @@ describe("SparseArray", () => {
 
       // set and delete
       for (const bad of [-1, 0.5, NaN]) {
-        assert.throws(() => arr.set(bad, "a", "b", "c"));
+        assert.throws(() => arr.set(bad, 4));
         assert.throws(() => arr.delete(bad, 3));
       }
       for (const bad of [-1, 0.5, NaN]) {
         assert.throws(() => arr.delete(3, bad));
       }
-      assert.doesNotThrow(() => arr.clone().set(15, "a", "b", "c"));
+      assert.doesNotThrow(() => arr.clone().set(15, 3));
       assert.doesNotThrow(() => arr.clone().delete(15, 3));
       assert.deepStrictEqual(arr.serialize(), initial);
 
@@ -606,87 +586,56 @@ describe("SparseArray", () => {
     }
   });
 
-  test("fromEntries errors", () => {
+  test("fromKeys errors", () => {
     for (const bad of [-1, 0.5, NaN]) {
-      assert.throws(() => SparseArray.fromEntries([[bad, "x"]]));
-      assert.throws(() =>
-        SparseArray.fromEntries([
-          [0, "y"],
-          [bad, "x"],
-        ])
-      );
+      assert.throws(() => SparseIndices.fromKeys([bad]));
+      assert.throws(() => SparseIndices.fromKeys([0, bad]));
     }
 
-    assert.throws(() =>
-      SparseArray.fromEntries([
-        [0, "x"],
-        [1, "y"],
-        [1, "z"],
-      ])
-    );
+    assert.throws(() => SparseIndices.fromKeys([0, 1, 1]));
 
-    assert.throws(() =>
-      SparseArray.fromEntries([
-        [0, "x"],
-        [2, "y"],
-        [1, "z"],
-      ])
-    );
+    assert.throws(() => SparseIndices.fromKeys([0, 2, 1]));
 
-    assert.doesNotThrow(() => SparseArray.fromEntries([]));
-    assert.doesNotThrow(() => SparseArray.fromEntries([[1, "x"]]));
-    assert.doesNotThrow(() =>
-      SparseArray.fromEntries([
-        [1, "x"],
-        [7, "y"],
-        [1000, "z"],
-      ])
-    );
+    assert.doesNotThrow(() => SparseIndices.fromKeys([]));
+    assert.doesNotThrow(() => SparseIndices.fromKeys([1]));
+    assert.doesNotThrow(() => SparseIndices.fromKeys([1, 7, 1000]));
   });
 
   test("deserialize errors", () => {
     for (const bad of [-1, 0.5, NaN]) {
-      assert.throws(() => SparseArray.deserialize([[], bad]));
-      assert.throws(() =>
-        SparseArray.deserialize([["a", "b", "c"], 7, ["x", "y"], bad, ["m"]])
-      );
+      assert.throws(() => SparseIndices.deserialize([0, bad]));
+      assert.throws(() => SparseIndices.deserialize([3, 7, 2, bad, 1]));
     }
 
     assert.throws(() =>
       // @ts-expect-error
-      SparseArray.deserialize([["a", "b", "c"], 7, "xyz", 3, ["m"]])
+      SparseIndices.deserialize([3, 7, ["x", "y", "z"], 3, 1])
     );
     assert.throws(() =>
       // @ts-expect-error
-      SparseArray.deserialize(["xyz", 7, ["a", "b", "c"], 3, ["m"]])
+      SparseIndices.deserialize([3, 7, "xyz", 3, 1])
     );
     assert.throws(() =>
       // @ts-expect-error
-      SparseArray.deserialize([["a", "b", "c"], 7, null, 3, ["m"]])
+      SparseIndices.deserialize([["x", "y", "z"], 7, 3, 3, 1])
     );
     assert.throws(() =>
       // @ts-expect-error
-      SparseArray.deserialize([["a", "b", "c"], 7, {}, 3, ["m"]])
+      SparseIndices.deserialize(["xyz", 7, 3, 3, 1])
     );
     assert.throws(() =>
-      SparseArray.deserialize([["a", "b", "c"], 7, 6, 3, ["m"]])
+      // @ts-expect-error
+      SparseIndices.deserialize([3, 7, null, 3, 1])
     );
     assert.throws(() =>
-      SparseArray.deserialize([["a", "b", "c"], 7, ["x"], ["y"], ["m"]])
+      // @ts-expect-error
+      SparseIndices.deserialize([3, 7, {}, 3, 1])
     );
 
-    assert.throws(() =>
-      SparseArray.deserialize([3, ["a", "b", "c"], 7, ["x", "y"], ["m"]])
-    );
+    assert.throws(() => SparseIndices.deserialize([3, 7, 0, 3, 1]));
+    assert.throws(() => SparseIndices.deserialize([3, 0, 2, 3, 1]));
 
-    assert.throws(() =>
-      SparseArray.deserialize([["a", "b", "c"], 7, [], 3, ["m"]])
-    );
-    assert.throws(() =>
-      SparseArray.deserialize([["a", "b", "c"], 0, ["x", "y"], 3, ["m"]])
-    );
-
-    assert.doesNotThrow(() => SparseArray.deserialize([]));
-    assert.doesNotThrow(() => SparseArray.deserialize([[], 7, ["x"]]));
+    assert.doesNotThrow(() => SparseIndices.deserialize([]));
+    assert.doesNotThrow(() => SparseIndices.deserialize([0, 7, 1]));
   });
 });

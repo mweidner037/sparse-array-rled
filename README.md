@@ -61,26 +61,27 @@ arr.set(1, "c");
 arr.set(4, "d");
 arr.delete(0);
 
-console.log([...arr.entries()]); // Prints [[1, "c"], [4, "d"]]
+console.log([...arr.entries()]); // Prints [[1, 'c'], [4, 'd']]
 ```
 
 Basic queries:
 
 ```ts
-arr.get(1); // "c"
-arr.get(4); // "d"
+arr.get(1); // 'c'
+arr.get(4); // 'd'
 arr.get(0); // undefined
 arr.get(10000); // undefined
 
 arr.has(1); // true
 arr.has(0); // false
 
-arr.hasGet(1); // [true, "c"]
+arr.hasGet(1); // [true, 'c']
 arr.hasGet(0); // [false, undefined]
 
-// Length behaves like for Array: by default it is the last present index + 1,
-// but you can increase it (creating holes) or decrease it (deleting values/holes).
+// Length is the last present index + 1 (or 0 if empty).
 console.log(arr.length); // Prints 5
+// Note: All methods accept index arguments `>= this.length`, acting as if
+// the array ends with infinitely many holes.
 ```
 
 Queries that only consider present values:
@@ -104,8 +105,8 @@ arr2.countAt(4); // [2, false]
 arr2.countAt(6); // [3, true]
 
 // Find the c-th present entry.
-arr2.findCount(2); // [1, "f"]
-arr2.findCount(3); // [5, "g"]
+arr2.findCount(1); // [1, 'f']
+arr2.findCount(2); // [5, 'g']
 arr2.findCount(5); // null
 arr2.findCount(1000); // null
 ```
@@ -117,19 +118,20 @@ const arr3 = SparseArray.new<string>();
 
 // Set multiple values (the rest parameters).
 arr3.set(0, "m", "n", "o", "p", "q");
-// Delete multiple values (the second arg, which says how many to delete).
-arr3.delete(0, 2);
+// Delete multiple values (the second arg, which says how many to delete -
+// *not* the index to end at.).
+arr3.delete(3, 2);
 
-console.log([...arr3.entries()]); // Prints [[2, "o"], [3, "p"], [4, "q"]]
+console.log([...arr3.entries()]); // Prints [[0, 'm'], [1, 'n'], [2, 'o']]
 ```
 
 Mutations return the previous values as a `SparseArray`:
 
 ```ts
-// arr3 starts with above entries - [[2, "o"], [3, "p"], [4, "q"]].
-const previous = arr3.delete(2, 7);
-console.log([...previous.entries()]); // Prints [[0, "o"], [1, "p"], [2, "q"]]
-console.log(previous.length); // Prints 5 (= 7 - 2)
+// arr3 starts as above: entries [[0, 'm'], [1, 'n'], [2, 'o']].
+const previous = arr3.delete(1, 5);
+console.log([...previous.entries()]); // Prints [[0, 'n'], [1, 'o']]
+console.log(previous.length); // Prints 2 (last present index + 1) - not necessarily the delete count.
 ```
 
 ### Serialized form
@@ -148,7 +150,7 @@ const arr4 = SparseArray.fromEntries([
   [5, "X"],
   [6, "yy"],
 ]);
-console.log(arr4.serialize()); // Prints [["foo", "bar"], 3, ["X", "yy"]]
+console.log(arr4.serialize()); // Prints [['foo', 'bar'], 3, ['X', 'yy']]
 ```
 
 Deserialize with `const arr3 = SparseArray.fromSerialized(serialized)`.
@@ -177,7 +179,7 @@ To reduce repetition and code size, most functionality for the three exported cl
 
 ## Performance
 
-To benchmark the library, I applied the operations corresponding to a collaborative text-editing trace (Martin Kleppmann's [automerge-perf](https://github.com/automerge/automerge-perf)), simulating this library's usage by the [list-positions](https://github.com/mweidner037/list-positions#readme) library as described [above](#collaborative-text-editing). The trace uses 3301 sparse arrays with average length 55 (max length 7604). It is 260k ops long, with 182k sets and 77k deletes, and the ending state has 105k chars.
+To benchmark the library, I applied the operations corresponding to a collaborative text-editing trace (Martin Kleppmann's [automerge-perf](https://github.com/automerge/automerge-perf)), simulating this library's usage by the [list-positions](https://github.com/mweidner037/list-positions#readme) library as described [above](#collaborative-text-editing). The trace uses 3301 sparse arrays with average final length 40.4 (max final length 7352). It is 260k ops long, with 182k sets and 77k deletes, and the ending state has 105k chars.
 
 In addition to this library's classes, the benchmarks test two ways of using a plain `Array<string>` in sparse mode (see [benchmarks/impls/plain_array.ts](./benchmarks/impls/plain_array.ts)).
 

@@ -6,7 +6,7 @@ export const PlainArrayImpl: Implementation = {
     return [];
   },
   isEmpty(arr: object) {
-    // TODO: also if arr is all holes.
+    // Note: misses if arr is all holes.
     const arr2 = arr as unknown[];
     return arr2.length === 0;
   },
@@ -37,7 +37,7 @@ export const PlainArray2Impl: Implementation = {
     return [];
   },
   isEmpty(arr: object) {
-    // TODO: also if arr is all holes.
+    // Note: misses if arr is all holes.
     const arr2 = arr as unknown[];
     return arr2.length === 0;
   },
