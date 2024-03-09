@@ -42,11 +42,12 @@ export function frontAndBack(impl: Implementation): void {
   for (let t = 0; t < 6670; t++) {
     const arr = impl.newEmpty();
     for (let j = 0; j < 10; j++) {
+      // Repeatedly: type 10 new chars, then backspace the last 5.
       for (let i = 0; i < 10; i++) {
         impl.set(arr, 10 * j + i, "a");
       }
       for (let i = 0; i < 5; i++) {
-        impl.delete(arr, 11 * j - i - 1);
+        impl.delete(arr, 10 * (j + 1) - i - 1);
       }
     }
   }
