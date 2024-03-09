@@ -78,9 +78,10 @@ arr.has(0); // false
 arr.hasGet(1); // [true, "c"]
 arr.hasGet(0); // [false, undefined]
 
-// Length behaves like for Array: by default it is the last present index + 1,
-// but you can increase it (creating holes) or decrease it (deleting values/holes).
+// Length is the last present index + 1 (or 0 if empty).
 console.log(arr.length); // Prints 5
+// Note: All methods accept index arguments `>= this.length`, acting as if
+// the array ends with infinitely many holes.
 ```
 
 Queries that only consider present values:
@@ -117,19 +118,20 @@ const arr3 = SparseArray.new<string>();
 
 // Set multiple values (the rest parameters).
 arr3.set(0, "m", "n", "o", "p", "q");
-// Delete multiple values (the second arg, which says how many to delete).
-arr3.delete(0, 2);
+// Delete multiple values (the second arg, which says how many to delete -
+// *not* the index to end at.).
+arr3.delete(3, 2);
 
-console.log([...arr3.entries()]); // Prints [[2, "o"], [3, "p"], [4, "q"]]
+console.log([...arr3.entries()]); // Prints [[0, "m"], [1, "n"], [2, "o"]]
 ```
 
 Mutations return the previous values as a `SparseArray`:
 
 ```ts
-// arr3 starts with above entries - [[2, "o"], [3, "p"], [4, "q"]].
-const previous = arr3.delete(2, 7);
-console.log([...previous.entries()]); // Prints [[0, "o"], [1, "p"], [2, "q"]]
-console.log(previous.length); // Prints 5 (= 7 - 2)
+// arr3 starts as above: entries [[0, "m"], [1, "n"], [2, "o"]].
+const previous = arr3.delete(1, 5);
+console.log([...previous.entries()]); // Prints [[0, "n"], [1, "o"]]
+console.log(previous.length); // Prints 2 (last present index + 1) - not necessarily the delete count.
 ```
 
 ### Serialized form

@@ -37,14 +37,9 @@ export interface IndicesSlicer {
 export class SparseIndices extends SparseItems<number> {
   /**
    * Returns a new, empty SparseIndices.
-   *
-   * @param length The initial length of the array.
-   *
-   * @throws If `length < 0`.
    */
-  static new(length = 0): SparseIndices {
-    checkIndex(length, "length");
-    return new this([], length);
+  static new(): SparseIndices {
+    return new this([]);
   }
 
   /**
@@ -54,7 +49,7 @@ export class SparseIndices extends SparseItems<number> {
    * @throws If the serialized form is invalid (see `SparseIndices.serialize`).
    */
   static deserialize(serialized: SerializedSparseIndices): SparseIndices {
-    return new this(...deserializeItems(serialized, indexesItemer));
+    return new this(deserializeItems(serialized, indexesItemer));
   }
 
   /**
@@ -62,11 +57,9 @@ export class SparseIndices extends SparseItems<number> {
    *
    * The keys must be in order by index.
    *
-   * @param length Overrides the array's initial length.
-   * Must be >= the "true" initial length (last entry's index + 1).
    * @see SparseIndices.keys
    */
-  static fromKeys(keys: Iterable<number>, length?: number): SparseIndices {
+  static fromKeys(keys: Iterable<number>): SparseIndices {
     const pairs: Pair<number>[] = [];
     let curLength = 0;
 
@@ -88,12 +81,7 @@ export class SparseIndices extends SparseItems<number> {
       curLength = index + 1;
     }
 
-    if (length !== undefined && length < curLength) {
-      throw new Error(
-        `length is less than (max index + 1): ${length} < ${curLength}`
-      );
-    }
-    return new this(pairs, length ?? curLength);
+    return new this(pairs);
   }
 
   /**
@@ -104,12 +92,9 @@ export class SparseIndices extends SparseItems<number> {
    * - counts of deleted values (odd indices).
    *
    * For example, the sparse array `[true, true, , , , true, true]` serializes to `[2, 3, 2]`.
-   *
-   * @param trimmed If true, the return value omits deletions at the end of the array,
-   * i.e., between the last present value and `this.length`.
    */
-  serialize(trimmed?: boolean): SerializedSparseIndices {
-    return super.serialize(trimmed);
+  serialize(): SerializedSparseIndices {
+    return super.serialize();
   }
 
   /**
@@ -123,6 +108,8 @@ export class SparseIndices extends SparseItems<number> {
    *
    * @param startIndex Index to start searching. If specified, only indices >= startIndex
    * contribute towards `count`.
+   *
+   * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
    */
   findCount(count: number, startIndex?: number): number | null {
     const located = this._findCount(count, startIndex);
@@ -158,8 +145,8 @@ export class SparseIndices extends SparseItems<number> {
     return this._delete(index, count);
   }
 
-  protected construct(pairs: Pair<number>[], length: number): this {
-    return new SparseIndices(pairs, length) as this;
+  protected construct(pairs: Pair<number>[]): this {
+    return new SparseIndices(pairs) as this;
   }
 
   protected itemer() {

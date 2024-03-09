@@ -44,6 +44,14 @@ function getPresentLength<T>(pairs: Pair<T[]>[]): number {
   return lastPair.index + lastPair.item.length;
 }
 
+function getValuesLength<T>(values: (T | null)[]): number {
+  let ans = 0;
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] !== null) ans = i + 1;
+  }
+  return ans;
+}
+
 function check(arr: SparseArray<string>, values: (string | null)[]) {
   const state = getState(arr);
   validate(state);
@@ -59,12 +67,12 @@ function check(arr: SparseArray<string>, values: (string | null)[]) {
     assert.strictEqual(arr.has(i), values[i] !== null);
     assert.strictEqual(arr.get(i), values[i] ?? undefined);
   }
-  assert.strictEqual(arr.length, values.length);
-  assert.isAtLeast(arr.length, getPresentLength(state));
+  assert.strictEqual(arr.length, getPresentLength(state));
+  assert.strictEqual(arr.length, getValuesLength(values));
 
   // getInfo should also work on indexes past the length.
   for (let i = 0; i < 10; i++) {
-    assert.deepStrictEqual(arr.hasGet(values.length + i), [false, undefined]);
+    assert.deepStrictEqual(arr.hasGet(arr.length + i), [false, undefined]);
   }
 }
 
@@ -150,7 +158,7 @@ class Checker {
     // Check agreement.
     this.check();
     check(replaced, replacedValues);
-    assert.strictEqual(replaced.length, replacedValues.length);
+    assert.strictEqual(replaced.length, getValuesLength(replacedValues));
   }
 
   delete(index: number, count: number) {
@@ -182,7 +190,7 @@ class Checker {
     // Check agreement.
     this.check();
     check(replaced, replacedValues);
-    assert.strictEqual(replaced.length, replacedValues.length);
+    assert.strictEqual(replaced.length, getValuesLength(replacedValues));
   }
 
   /**
@@ -206,7 +214,7 @@ class Checker {
     assert.strictEqual(nextEntry, entries.length);
 
     // Test fromEntries.
-    const arr2 = SparseArray.fromEntries(entries, this.arr.length);
+    const arr2 = SparseArray.fromEntries(entries);
     check(arr2, this.values);
 
     // Test findCount.
@@ -285,7 +293,6 @@ describe("SparseArray", () => {
 
   test("empty", () => {
     check(SparseArray.new(), []);
-    check(SparseArray.new(3), [null, null, null]);
   });
 
   test("set once", () => {
@@ -488,6 +495,10 @@ describe("SparseArray", () => {
       cloned.set(13, "unequal");
       assert.deepStrictEqual(arr.serialize(), arrSerialized);
     }
+  });
+
+  test("serialize", () => {
+    // TODO: a copy explicit examples of serialize
   });
 
   test("method errors", () => {

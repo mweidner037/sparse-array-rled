@@ -51,14 +51,9 @@ export interface ArraySlicer<T> {
 export class SparseArray<T> extends SparseItems<T[]> {
   /**
    * Returns a new, empty SparseArray.
-   *
-   * @param length The initial length of the array.
-   *
-   * @throws If `length < 0`.
    */
-  static new<T>(length = 0): SparseArray<T> {
-    checkIndex(length, "length");
-    return new this([], length);
+  static new<T>(): SparseArray<T> {
+    return new this([]);
   }
 
   // OPT: unsafe version that skips internal T[] clones?
@@ -70,9 +65,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * @throws If the serialized form is invalid (see `SparseArray.serialize`).
    */
   static deserialize<T>(serialized: SerializedSparseArray<T>): SparseArray<T> {
-    return new this(
-      ...deserializeItems(serialized, arrayItemer as Itemer<T[]>)
-    );
+    return new this(deserializeItems(serialized, arrayItemer as Itemer<T[]>));
   }
 
   /**
@@ -80,13 +73,10 @@ export class SparseArray<T> extends SparseItems<T[]> {
    *
    * The entries must be in order by index.
    *
-   * @param length Overrides the array's initial length.
-   * Must be >= the "true" initial length (last entry's index + 1).
    * @see SparseArray.entries
    */
   static fromEntries<T>(
-    entries: Iterable<[index: number, value: T]>,
-    length?: number
+    entries: Iterable<[index: number, value: T]>
   ): SparseArray<T> {
     const pairs: Pair<T[]>[] = [];
     let curLength = 0;
@@ -109,12 +99,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
       curLength = index + 1;
     }
 
-    if (length !== undefined && length < curLength) {
-      throw new Error(
-        `length is less than (max index + 1): ${length} < ${curLength}`
-      );
-    }
-    return new this(pairs, length ?? curLength);
+    return new this(pairs);
   }
 
   /**
@@ -125,19 +110,15 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * - numbers (odd indices), representing that number of deleted values.
    *
    * For example, the sparse array `["foo", "bar", , , , "X", "yy"]` serializes to `[["foo", "bar"], 3, ["X", "yy"]]`.
-   *
-   * @param trimmed If true, the return value omits deletions at the end of the array,
-   * i.e., between the last present value and `this.length`. So when true,
-   * the return value never ends in a number.
    */
-  serialize(trimmed?: boolean): SerializedSparseArray<T> {
-    return super.serialize(trimmed);
+  serialize(): SerializedSparseArray<T> {
+    return super.serialize();
   }
 
   /**
    * Returns whether the value at index is present, and if so, its value.
    *
-   * No error is thrown for index >= this.length.
+   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
   hasGet(index: number): [has: true, get: T] | [has: false, get: undefined] {
     const located = this._get(index);
@@ -149,7 +130,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
   /**
    * Returns the value at index, or undefined if not present.
    *
-   * No error is thrown for index >= this.length.
+   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
   get(index: number): T | undefined {
     return this.hasGet(index)[1];
@@ -166,6 +147,8 @@ export class SparseArray<T> extends SparseItems<T[]> {
    *
    * @param startIndex Index to start searching. If specified, only indices >= startIndex
    * contribute towards `count`.
+   *
+   * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
    */
   findCount(
     count: number,
@@ -219,8 +202,8 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return this._delete(index, count);
   }
 
-  protected construct(pairs: Pair<T[]>[], length: number): this {
-    return new SparseArray(pairs, length) as this;
+  protected construct(pairs: Pair<T[]>[]): this {
+    return new SparseArray(pairs) as this;
   }
 
   protected itemer() {

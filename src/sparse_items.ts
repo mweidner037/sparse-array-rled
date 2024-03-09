@@ -84,7 +84,6 @@ export interface ItemSlicer<I> {
 // TODO: measure perf impacts:
 // - switch back to normalItem at end of set/delete, if possible.
 // - Don't set _pairs until forced (hidden class change).
-// - Don't store _length unless it differs from the "true" length.
 
 /**
  * Templated implementation of the published Sparse* classes.
@@ -108,14 +107,12 @@ export abstract class SparseItems<I> {
   private _pairs: Pair<I>[] | null = null;
   private _normalItem: I | null = null;
 
-  private _length: number;
-
   /**
    * Constructs a SparseItems with the given state, performing no validation.
    *
    * Don't override this constructor.
    */
-  protected constructor(pairs: Pair<I>[], length: number) {
+  protected constructor(pairs: Pair<I>[]) {
     if (pairs.length === 0) {
       this._normalItem = this.itemer().newEmpty();
     } else if (pairs.length === 1 && pairs[0].index === 0) {
@@ -123,7 +120,6 @@ export abstract class SparseItems<I> {
     } else {
       this._pairs = pairs;
     }
-    this._length = length;
   }
 
   /**
@@ -131,7 +127,7 @@ export abstract class SparseItems<I> {
    * this abstract method to construct instances of `this` as if we had called
    * our own constructor.
    */
-  protected abstract construct(pairs: Pair<I>[], length: number): this;
+  protected abstract construct(pairs: Pair<I>[]): this;
 
   /**
    * Returns an Itemer for working with our item type.
@@ -166,25 +162,25 @@ export abstract class SparseItems<I> {
   }
 
   /**
-   * The length of the array.
+   * The greatest present index in the array plus 1, or 0 if there are no
+   * present values.
    *
-   * By default, this is one more than the greatest touched (set/deleted) index,
-   * but you can manually set it to a larger value.
+   * All methods accept index arguments `>= this.length`, acting as if
+   * the array ends with infinitely many holes.
    *
-   * Setting `length` to a value smaller than the "true" length deletes indices
-   * \>= the new length.
+   * Note: Unlike an ordinary `Array`, you cannot explicitly set the length
+   * to include additional holes.
    */
   get length(): number {
-    return this._length;
-  }
+    if (this._normalItem !== null)
+      return this.itemer().length(this._normalItem);
 
-  set length(newLength: number) {
-    checkIndex(newLength, "length");
-
-    if (newLength < this._length) {
-      this._delete(newLength, this._length - newLength);
+    const pairs = nonNull(this._pairs);
+    if (pairs.length === 0) return 0;
+    else {
+      const lastPair = pairs[pairs.length - 1];
+      return lastPair.index + this.itemer().length(lastPair.item);
     }
-    this._length = newLength;
   }
 
   /**
@@ -408,8 +404,7 @@ export abstract class SparseItems<I> {
       this.asPairs().map((pair) => ({
         index: pair.index,
         item: this.itemer().slice(pair.item),
-      })),
-      this.length
+      }))
     );
   }
 
@@ -418,20 +413,13 @@ export abstract class SparseItems<I> {
    *
    * The return value uses a run-length encoding: it alternates between
    * - present items (even indices), and
-   * - numbers (odd indices), represent that number of deleted values.
-   *
-   * @param trimmed If true, the return value omits deletions at the end of the array,
-   * i.e., between the last present value and `this.length`. So when true,
-   * the return value never ends in a number.
+   * - numbers (odd indices), representing that number of deleted values.
    */
-  serialize(trimmed = false): (I | number)[] {
-    if (this.length === 0) return [];
-
+  serialize(): (I | number)[] {
     const savedState: (I | number)[] = [];
     const pairs = this.asPairs();
-    if (pairs.length === 0) {
-      savedState.push(this.itemer().newEmpty(), this.length);
-    } else {
+    if (pairs.length === 0) return [];
+    else {
       if (pairs[0].index !== 0) {
         savedState.push(this.itemer().newEmpty(), pairs[0].index);
       }
@@ -443,9 +431,6 @@ export abstract class SparseItems<I> {
           this.itemer().slice(pairs[i].item)
         );
         lastEnd = pairs[i].index + this.itemer().length(pairs[i].item);
-      }
-      if (!trimmed && this.length > lastEnd) {
-        savedState.push(this.length - lastEnd);
       }
     }
     return savedState;
@@ -469,13 +454,8 @@ export abstract class SparseItems<I> {
     checkIndex(index);
     checkIndex(count, "count");
 
-    // Update length to "touch" [index, index + count), even if count is 0.
-    // TODO: instead, match Array's behavior: if this deletes up to the current _length,
-    // reduce _length.
-    this._length = Math.max(this._length, index + count);
-
     // Avoid trivial-item edge case.
-    if (count === 0) return this.construct([], 0);
+    if (count === 0) return this.construct([]);
 
     if (this._normalItem !== null) {
       const normalLen = this.itemer().length(this._normalItem);
@@ -483,11 +463,10 @@ export abstract class SparseItems<I> {
       if (index + count >= normalLen) {
         let replaced: this;
         if (index < normalLen) {
-          replaced = this.construct(
-            [{ index: 0, item: this.itemer().slice(this._normalItem, index) }],
-            count
-          );
-        } else replaced = this.construct([], count);
+          replaced = this.construct([
+            { index: 0, item: this.itemer().slice(this._normalItem, index) },
+          ]);
+        } else replaced = this.construct([]);
         if (index < normalLen) {
           this._normalItem = this.itemer().shorten(this._normalItem, index);
         }
@@ -524,7 +503,7 @@ export abstract class SparseItems<I> {
           }
           start.item = this.itemer().shorten(start.item, sOffset);
 
-          return this.construct([{ index: 0, item: sMid }], count);
+          return this.construct([{ index: 0, item: sMid }]);
         } else {
           // The tail of start is deleted, and later segments may also be affected.
           replacedPairs.push({
@@ -574,7 +553,7 @@ export abstract class SparseItems<I> {
     if (i != sI + 1) {
       pairs.splice(sI + 1, i - (sI + 1));
     }
-    return this.construct(replacedPairs, count);
+    return this.construct(replacedPairs);
   }
 
   /**
@@ -593,11 +572,8 @@ export abstract class SparseItems<I> {
 
     const count = this.itemer().length(item);
 
-    // Update length to "touch" [index, index + count), even if count is 0.
-    this._length = Math.max(this._length, index + count);
-
     // Avoid trivial-item edge case.
-    if (count === 0) return this.construct([], 0);
+    if (count === 0) return this.construct([]);
 
     if (this._normalItem !== null) {
       const normalLen = this.itemer().length(this._normalItem);
@@ -605,20 +581,13 @@ export abstract class SparseItems<I> {
       if (index <= normalLen) {
         let replaced: this;
         if (index < normalLen) {
-          replaced = this.construct(
-            [
-              {
-                index: 0,
-                item: this.itemer().slice(
-                  this._normalItem,
-                  index,
-                  index + count
-                ),
-              },
-            ],
-            count
-          );
-        } else replaced = this.construct([], count);
+          replaced = this.construct([
+            {
+              index: 0,
+              item: this.itemer().slice(this._normalItem, index, index + count),
+            },
+          ]);
+        } else replaced = this.construct([]);
         this._normalItem = this.itemer().update(this._normalItem, index, item);
         return replaced;
       }
@@ -630,16 +599,16 @@ export abstract class SparseItems<I> {
     // Optimize common case: append.
     if (pairs.length === 0) {
       pairs.push({ index, item });
-      return this.construct([], count);
+      return this.construct([]);
     } else {
       const lastPair = pairs[pairs.length - 1];
       const lastLength = this.itemer().length(lastPair.item);
       if (lastPair.index + lastLength == index) {
         lastPair.item = this.itemer().merge(lastPair.item, item);
-        return this.construct([], count);
+        return this.construct([]);
       } else if (lastPair.index + lastLength < index) {
         pairs.push({ index, item });
-        return this.construct([], count);
+        return this.construct([]);
       }
     }
 
@@ -658,7 +627,7 @@ export abstract class SparseItems<I> {
           const sMid = this.itemer().slice(start, sOffset, sOffset + count);
           // Modify the existing segment in-place.
           pairs[sI].item = this.itemer().update(start, sOffset, item);
-          return this.construct([{ index: 0, item: sMid }], count);
+          return this.construct([{ index: 0, item: sMid }]);
         } else {
           if (sOffset < sLength) {
             // The tail of start is overwritten.
@@ -732,7 +701,7 @@ export abstract class SparseItems<I> {
       // Still need to add item, as a new segment.
       pairs.splice(sI + 1, i - (sI + 1), { item, index });
     }
-    return this.construct(replacedPairs, count);
+    return this.construct(replacedPairs);
   }
 }
 
@@ -745,9 +714,15 @@ export abstract class SparseItems<I> {
 export function deserializeItems<I>(
   serialized: (I | number)[],
   itemer: Itemer<I>
-): [pairs: Pair<I>[], length: number] {
+): Pair<I>[] {
   const pairs: Pair<I>[] = [];
   let nextIndex = 0;
+
+  if (serialized.length % 2 === 0 && serialized.length !== 0) {
+    throw new Error(
+      `Invalid serialized form: ends with deleted values ${serialized.at(-1)}`
+    );
+  }
 
   for (let j = 0; j < serialized.length; j++) {
     if (j % 2 === 0) {
@@ -768,7 +743,7 @@ export function deserializeItems<I>(
     }
   }
 
-  return [pairs, nextIndex];
+  return pairs;
 }
 
 /**

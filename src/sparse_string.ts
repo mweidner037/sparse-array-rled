@@ -42,14 +42,9 @@ export interface StringSlicer {
 export class SparseString extends SparseItems<string> {
   /**
    * Returns a new, empty SparseString.
-   *
-   * @param length The initial length of the string.
-   *
-   * @throws If `length < 0`.
    */
-  static new(length = 0): SparseString {
-    checkIndex(length, "length");
-    return new this([], length);
+  static new(): SparseString {
+    return new this([]);
   }
 
   /**
@@ -59,7 +54,7 @@ export class SparseString extends SparseItems<string> {
    * @throws If the serialized form is invalid (see `SparseString.serialize`).
    */
   static deserialize(serialized: SerializedSparseString): SparseString {
-    return new this(...deserializeItems(serialized, stringItemer));
+    return new this(deserializeItems(serialized, stringItemer));
   }
 
   /**
@@ -67,13 +62,10 @@ export class SparseString extends SparseItems<string> {
    *
    * The entries must be in order by index.
    *
-   * @param length Overrides the array's initial length.
-   * Must be >= the "true" initial length (last entry's index + 1).
    * @see SparseString.entries
    */
   static fromEntries(
-    entries: Iterable<[index: number, char: string]>,
-    length?: number
+    entries: Iterable<[index: number, char: string]>
   ): SparseString {
     const pairs: Pair<string>[] = [];
     let curLength = 0;
@@ -96,12 +88,7 @@ export class SparseString extends SparseItems<string> {
       curLength = index + 1;
     }
 
-    if (length !== undefined && length < curLength) {
-      throw new Error(
-        `length is less than (max index + 1): ${length} < ${curLength}`
-      );
-    }
-    return new this(pairs, length ?? curLength);
+    return new this(pairs);
   }
 
   /**
@@ -112,19 +99,15 @@ export class SparseString extends SparseItems<string> {
    * - numbers (odd indices), representing that number of deleted chars.
    *
    * For example, the sparse string `["a", "b", , , , "f", "g"]` serializes to `["ab", 3, "fg"]`.
-   *
-   * @param trimmed If true, the return value omits deletions at the end of the string,
-   * i.e., between the last present value and `this.length`. So when true,
-   * the return value never ends in a number.
    */
-  serialize(trimmed?: boolean): SerializedSparseString {
-    return super.serialize(trimmed);
+  serialize(): SerializedSparseString {
+    return super.serialize();
   }
 
   /**
    * Returns whether the char at index is present, and if so, its value.
    *
-   * No error is thrown for index >= this.length.
+   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
   hasGet(
     index: number
@@ -138,7 +121,7 @@ export class SparseString extends SparseItems<string> {
   /**
    * Returns the char at index, or undefined if not present.
    *
-   * No error is thrown for index >= this.length.
+   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
   get(index: number): string | undefined {
     return this.hasGet(index)[1];
@@ -155,6 +138,8 @@ export class SparseString extends SparseItems<string> {
    *
    * @param startIndex Index to start searching. If specified, only indices >= startIndex
    * contribute towards `count`.
+   *
+   * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
    */
   findCount(
     count: number,
@@ -208,8 +193,8 @@ export class SparseString extends SparseItems<string> {
     return this._delete(index, count);
   }
 
-  protected construct(pairs: Pair<string>[], length: number): this {
-    return new SparseString(pairs, length) as this;
+  protected construct(pairs: Pair<string>[]): this {
+    return new SparseString(pairs) as this;
   }
 
   protected itemer() {
