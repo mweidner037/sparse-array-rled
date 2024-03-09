@@ -61,21 +61,21 @@ arr.set(1, "c");
 arr.set(4, "d");
 arr.delete(0);
 
-console.log([...arr.entries()]); // Prints [[1, "c"], [4, "d"]]
+console.log([...arr.entries()]); // Prints [[1, 'c'], [4, 'd']]
 ```
 
 Basic queries:
 
 ```ts
-arr.get(1); // "c"
-arr.get(4); // "d"
+arr.get(1); // 'c'
+arr.get(4); // 'd'
 arr.get(0); // undefined
 arr.get(10000); // undefined
 
 arr.has(1); // true
 arr.has(0); // false
 
-arr.hasGet(1); // [true, "c"]
+arr.hasGet(1); // [true, 'c']
 arr.hasGet(0); // [false, undefined]
 
 // Length is the last present index + 1 (or 0 if empty).
@@ -105,8 +105,8 @@ arr2.countAt(4); // [2, false]
 arr2.countAt(6); // [3, true]
 
 // Find the c-th present entry.
-arr2.findCount(2); // [1, "f"]
-arr2.findCount(3); // [5, "g"]
+arr2.findCount(1); // [1, 'f']
+arr2.findCount(2); // [5, 'g']
 arr2.findCount(5); // null
 arr2.findCount(1000); // null
 ```
@@ -122,15 +122,15 @@ arr3.set(0, "m", "n", "o", "p", "q");
 // *not* the index to end at.).
 arr3.delete(3, 2);
 
-console.log([...arr3.entries()]); // Prints [[0, "m"], [1, "n"], [2, "o"]]
+console.log([...arr3.entries()]); // Prints [[0, 'm'], [1, 'n'], [2, 'o']]
 ```
 
 Mutations return the previous values as a `SparseArray`:
 
 ```ts
-// arr3 starts as above: entries [[0, "m"], [1, "n"], [2, "o"]].
+// arr3 starts as above: entries [[0, 'm'], [1, 'n'], [2, 'o']].
 const previous = arr3.delete(1, 5);
-console.log([...previous.entries()]); // Prints [[0, "n"], [1, "o"]]
+console.log([...previous.entries()]); // Prints [[0, 'n'], [1, 'o']]
 console.log(previous.length); // Prints 2 (last present index + 1) - not necessarily the delete count.
 ```
 
@@ -150,7 +150,7 @@ const arr4 = SparseArray.fromEntries([
   [5, "X"],
   [6, "yy"],
 ]);
-console.log(arr4.serialize()); // Prints [["foo", "bar"], 3, ["X", "yy"]]
+console.log(arr4.serialize()); // Prints [['foo', 'bar'], 3, ['X', 'yy']]
 ```
 
 Deserialize with `const arr3 = SparseArray.fromSerialized(serialized)`.
