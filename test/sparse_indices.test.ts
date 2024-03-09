@@ -242,7 +242,7 @@ class Checker {
     assert.strictEqual(this.arr.count(), valuesCount);
     assert.strictEqual(this.arr.isEmpty(), valuesCount === 0);
     for (let i = 0; i < this.values.length + 2; i++) {
-      assert.deepStrictEqual(this.arr.countAt(i), [
+      assert.deepStrictEqual(this.arr._countHas(i), [
         countBetween(this.values, 0, i),
         i < this.values.length && this.values[i] !== null,
       ]);

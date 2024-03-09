@@ -240,17 +240,11 @@ export abstract class SparseItems<I> {
   }
 
   /**
-   * Returns the count at index, plus whether index is present.
-   *
-   * The "count at index" is the number of present values up to but excluding index.
-   * Equivalent, it is the `c` such that index is
-   * the `c`-th present value (or would be if present).
-   *
-   * Invert with findCount.
+   * @ignore Internal optimized combination of `countAt` and `has`.
    *
    * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
-  countAt(index: number): [count: number, has: boolean] {
+  _countHas(index: number): [count: number, has: boolean] {
     checkIndex(index);
 
     if (this._normalItem !== null) {
@@ -270,6 +264,21 @@ export abstract class SparseItems<I> {
       count += itemLength;
     }
     return [count, false];
+  }
+
+  /**
+   * Returns the count at index.
+   *
+   * The "count at index" is the number of present values up to but excluding index.
+   * Equivalent, it is the `c` such that index is
+   * the `c`-th present value (or would be if present).
+   *
+   * Invert with findCount.
+   *
+   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
+   */
+  countAt(index: number): number {
+    return this._countHas(index)[0];
   }
 
   /**

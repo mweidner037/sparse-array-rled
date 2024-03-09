@@ -98,8 +98,8 @@ arr2.count(); // 4
 arr2.countBetween(0, 4); // 2
 
 // Present values up to but excluding a given index, plus whether that index is present.
-arr2.countAt(4); // [2, false]
-arr2.countAt(6); // [3, true]
+arr2.countAt(4); // 2
+arr2.countAt(6); // 3
 
 // Find the c-th present entry.
 arr2.findCount(1); // [1, 'f']
