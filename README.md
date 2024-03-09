@@ -179,7 +179,7 @@ To reduce repetition and code size, most functionality for the three exported cl
 
 ## Performance
 
-To benchmark the library, I applied the operations corresponding to a collaborative text-editing trace (Martin Kleppmann's [automerge-perf](https://github.com/automerge/automerge-perf)), simulating this library's usage by the [list-positions](https://github.com/mweidner037/list-positions#readme) library as described [above](#collaborative-text-editing). The trace uses 3301 sparse arrays with average length 55 (max length 7604). It is 260k ops long, with 182k sets and 77k deletes, and the ending state has 105k chars.
+To benchmark the library, I applied the operations corresponding to a collaborative text-editing trace (Martin Kleppmann's [automerge-perf](https://github.com/automerge/automerge-perf)), simulating this library's usage by the [list-positions](https://github.com/mweidner037/list-positions#readme) library as described [above](#collaborative-text-editing). The trace uses 3301 sparse arrays with average final length 40.4 (max final length 7352). It is 260k ops long, with 182k sets and 77k deletes, and the ending state has 105k chars.
 
 In addition to this library's classes, the benchmarks test two ways of using a plain `Array<string>` in sparse mode (see [benchmarks/impls/plain_array.ts](./benchmarks/impls/plain_array.ts)).
 
