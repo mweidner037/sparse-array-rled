@@ -270,7 +270,7 @@ class Checker {
       while (rng() >= 0.75) {
         // Length 0 to 20 (0 can happen w/ concurrent or L/R dual siblings).
         const len = Math.floor(rng() * 21);
-        const actual = [...slicer.nextSlice(lastEnd + len)];
+        const actual = slicer.nextSlice(lastEnd + len);
         const expectedEntries = [...this.values.entries()]
           .slice(lastEnd, lastEnd + len)
           .filter(([, value]) => value != null);
@@ -278,8 +278,13 @@ class Checker {
         assert.deepStrictEqual(actual, expected);
         lastEnd += len;
       }
-      // Finish. TODO: check output.
-      slicer.nextSlice(null);
+      // Finish.
+      const expectedEntries = [...this.values.entries()]
+        .slice(lastEnd)
+        .filter(([, value]) => value != null);
+      const expected = entriesAsItems(expectedEntries);
+      const actual = slicer.nextSlice(null);
+      assert.deepStrictEqual(actual, expected);
     }
   }
 }
@@ -435,7 +440,7 @@ describe("SparseArray", () => {
     const ALL_LENGTH = 7;
     test(`all ${ALL_LENGTH}-length ops`, function () {
       // Generous timeout (5x what my laptop needs).
-      this.timeout(45000);
+      this.timeout(50000);
 
       // Generate each possible array outline of length <= ALL_LENGTH.
       for (let a = 0; a < Math.pow(2, ALL_LENGTH); a++) {
@@ -498,7 +503,32 @@ describe("SparseArray", () => {
   });
 
   test("serialize", () => {
-    // TODO: a copy explicit examples of serialize
+    // Test a few explicit examples of serialize.
+    const arr = SparseArray.new<string>();
+    assert.deepStrictEqual(arr.serialize(), []);
+
+    arr.set(0, "a", "b");
+    assert.deepStrictEqual(arr.serialize(), [["a", "b"]]);
+
+    arr.delete(0, 2);
+    assert.deepStrictEqual(arr.serialize(), []);
+
+    arr.set(5, "c", "d");
+    assert.deepStrictEqual(arr.serialize(), [[], 5, ["c", "d"]]);
+
+    arr.delete(0, 10);
+    assert.deepStrictEqual(arr.serialize(), []);
+
+    arr.set(0, "x");
+    arr.set(2, "y", "z");
+    arr.set(7, "A", "B", "C");
+    assert.deepStrictEqual(arr.serialize(), [
+      ["x"],
+      1,
+      ["y", "z"],
+      3,
+      ["A", "B", "C"],
+    ]);
   });
 
   test("method errors", () => {
@@ -531,9 +561,9 @@ describe("SparseArray", () => {
 
       // has etc.
       for (const bad of [-1, 0.5, NaN]) {
-        assert.throws(() => arr.has(-1));
-        assert.throws(() => arr.get(-1));
-        assert.throws(() => arr.hasGet(-1));
+        assert.throws(() => arr.has(bad));
+        assert.throws(() => arr.get(bad));
+        assert.throws(() => arr.hasGet(bad));
       }
       assert.doesNotThrow(() => arr.has(18));
       assert.doesNotThrow(() => arr.get(18));
@@ -570,6 +600,8 @@ describe("SparseArray", () => {
       slicer.nextSlice(3);
       assert.throws(() => slicer.nextSlice(2));
       assert.doesNotThrow(() => slicer.nextSlice(4));
+      // Repeat endIndex should given empty slice, not error.
+      assert.deepStrictEqual(slicer.nextSlice(4), []);
       assert.doesNotThrow(() => slicer.nextSlice(18));
       assert.doesNotThrow(() => slicer.nextSlice(null));
       assert.deepStrictEqual(arr.serialize(), initial);
@@ -618,30 +650,42 @@ describe("SparseArray", () => {
     for (const bad of [-1, 0.5, NaN]) {
       assert.throws(() => SparseArray.deserialize([[], bad]));
       assert.throws(() =>
-        SparseArray.deserialize([["a", "b", "c"], 7, ["x", "y"], bad])
+        SparseArray.deserialize([["a", "b", "c"], 7, ["x", "y"], bad, ["m"]])
       );
     }
 
     assert.throws(() =>
       // @ts-expect-error
-      SparseArray.deserialize([["a", "b", "c"], 7, "xyz", 3])
+      SparseArray.deserialize([["a", "b", "c"], 7, "xyz", 3, ["m"]])
     );
-    // @ts-expect-error
-    assert.throws(() => SparseArray.deserialize([["a", "b", "c"], 7, null, 3]));
-    // @ts-expect-error
-    assert.throws(() => SparseArray.deserialize([["a", "b", "c"], 7, {}, 3]));
-    assert.throws(() => SparseArray.deserialize([["a", "b", "c"], 7, 6, 3]));
     assert.throws(() =>
-      SparseArray.deserialize([["a", "b", "c"], 7, ["x"], ["y"]])
+      // @ts-expect-error
+      SparseArray.deserialize(["xyz", 7, ["a", "b", "c"], 3, ["m"]])
+    );
+    assert.throws(() =>
+      // @ts-expect-error
+      SparseArray.deserialize([["a", "b", "c"], 7, null, 3, ["m"]])
+    );
+    assert.throws(() =>
+      // @ts-expect-error
+      SparseArray.deserialize([["a", "b", "c"], 7, {}, 3, ["m"]])
+    );
+    assert.throws(() =>
+      SparseArray.deserialize([["a", "b", "c"], 7, 6, 3, ["m"]])
+    );
+    assert.throws(() =>
+      SparseArray.deserialize([["a", "b", "c"], 7, ["x"], ["y"], ["m"]])
     );
 
     assert.throws(() =>
-      SparseArray.deserialize([3, ["a", "b", "c"], 7, ["x", "y"]])
+      SparseArray.deserialize([3, ["a", "b", "c"], 7, ["x", "y"], ["m"]])
     );
 
-    assert.throws(() => SparseArray.deserialize([["a", "b", "c"], 7, [], 3]));
     assert.throws(() =>
-      SparseArray.deserialize([["a", "b", "c"], 0, ["x", "y"], 3])
+      SparseArray.deserialize([["a", "b", "c"], 7, [], 3, ["m"]])
+    );
+    assert.throws(() =>
+      SparseArray.deserialize([["a", "b", "c"], 0, ["x", "y"], 3, ["m"]])
     );
 
     assert.doesNotThrow(() => SparseArray.deserialize([]));

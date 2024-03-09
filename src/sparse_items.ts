@@ -549,7 +549,6 @@ export abstract class SparseItems<I> {
     }
 
     // Delete [sI + 1, i).
-    // TODO: try removing if statement now that it's just one splice.
     if (i != sI + 1) {
       pairs.splice(sI + 1, i - (sI + 1));
     }
@@ -693,7 +692,6 @@ export abstract class SparseItems<I> {
 
     // Delete [sI + 1, i).
     if (itemAdded) {
-      // TODO: try removing if statement now that it's just one splice.
       if (i != sI + 1) {
         pairs.splice(sI + 1, i - (sI + 1));
       }
