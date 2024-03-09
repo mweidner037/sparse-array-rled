@@ -175,7 +175,9 @@ const indexesItemer: Itemer<number> = {
   },
 
   slice(item: number, start?: number, end?: number): number {
-    return (end ?? item) - (start ?? 0);
+    const realStart = start === undefined ? 0 : Math.min(start, item);
+    const realEnd = end === undefined ? item : Math.min(end, item);
+    return realEnd - realStart;
   },
 
   update(item: number, index: number, replace: number): number {

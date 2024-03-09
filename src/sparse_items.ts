@@ -40,6 +40,9 @@ export interface Itemer<I> {
 
   /**
    * Returns a new (non-aliased) item representing the given slice.
+   *
+   * Note: start and end may be beyond the length; these cases should be
+   * handled as in Array.slice. (TODO: avoid so we can eliminate SparseIndices special cases?)
    */
   slice(item: I, start?: number, end?: number): I;
 
@@ -52,7 +55,7 @@ export interface Itemer<I> {
   update(item: I, start: number, replace: I): I;
 
   /**
-   * Returns item shortened the given length, which is guaranteed to
+   * Returns item shortened to the given length, which is guaranteed to
    * be <= item.length.
    *
    * May modify item in-place and return it.
