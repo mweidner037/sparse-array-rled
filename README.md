@@ -75,9 +75,6 @@ arr.get(10000); // undefined
 arr.has(1); // true
 arr.has(0); // false
 
-arr.hasGet(1); // [true, 'c']
-arr.hasGet(0); // [false, undefined]
-
 // Length is the last present index + 1 (or 0 if empty).
 console.log(arr.length); // Prints 5
 // Note: All methods accept index arguments `>= this.length`, acting as if

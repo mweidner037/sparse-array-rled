@@ -286,11 +286,13 @@ export abstract class SparseItems<I> {
   }
 
   /**
+   * @ignore Internal templated version of `get`.
+   *
    * Returns the value at index, in the form [item, offset within item].
    *
    * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
-  protected _get(index: number): [item: I, offset: number] | null {
+  _get(index: number): [item: I, offset: number] | null {
     checkIndex(index);
 
     if (this._normalItem !== null) {
@@ -319,6 +321,8 @@ export abstract class SparseItems<I> {
   }
 
   /**
+   * @ignore Internal templated version of `findCount`.
+   *
    * Finds the index corresponding to the given count.
    *
    * That is, we advance through the array
@@ -332,7 +336,7 @@ export abstract class SparseItems<I> {
    *
    * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
    */
-  protected _findCount(
+  _findCount(
     count: number,
     startIndex = 0
   ): [index: number, item: I, offset: number] | null {
@@ -453,7 +457,7 @@ export abstract class SparseItems<I> {
    *
    * @throws If `index < 0` or `count < 0`. (It is okay if the range extends beyond `this.length`.)
    */
-  protected _delete(index: number, count: number): this {
+  delete(index: number, count: number): this {
     checkIndex(index);
     checkIndex(count, "count");
 
@@ -559,6 +563,8 @@ export abstract class SparseItems<I> {
   }
 
   /**
+   * @ignore Internal templated version of `set`.
+   *
    * Sets values starting at index.
    *
    * That is, sets all values in the range [index, index + item.length) to the
@@ -569,7 +575,7 @@ export abstract class SparseItems<I> {
    *
    * @throws If `index < 0`. (It is okay if the range extends beyond `this.length`.)
    */
-  protected _set(index: number, item: I): this {
+  _set(index: number, item: I): this {
     checkIndex(index);
 
     const count = this.itemer().length(item);
@@ -710,7 +716,7 @@ export abstract class SparseItems<I> {
  * Templated implementation of deserialization
  *
  * Each subclass implements a static `deserialize` method as
- * `return new this(...deserializeItems(serialized, <class's itemer>))`.
+ * `return new <class>(...deserializeItems(serialized, <class's itemer>))`.
  */
 export function deserializeItems<I>(
   serialized: (I | number)[],

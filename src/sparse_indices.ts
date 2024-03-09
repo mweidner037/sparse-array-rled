@@ -39,7 +39,7 @@ export class SparseIndices extends SparseItems<number> {
    * Returns a new, empty SparseIndices.
    */
   static new(): SparseIndices {
-    return new this([]);
+    return new SparseIndices([]);
   }
 
   /**
@@ -49,7 +49,7 @@ export class SparseIndices extends SparseItems<number> {
    * @throws If the serialized form is invalid (see `SparseIndices.serialize`).
    */
   static deserialize(serialized: SerializedSparseIndices): SparseIndices {
-    return new this(deserializeItems(serialized, indexesItemer));
+    return new SparseIndices(deserializeItems(serialized, indexesItemer));
   }
 
   /**
@@ -81,7 +81,7 @@ export class SparseIndices extends SparseItems<number> {
       curLength = index + 1;
     }
 
-    return new this(pairs);
+    return new SparseIndices(pairs);
   }
 
   /**
@@ -131,18 +131,6 @@ export class SparseIndices extends SparseItems<number> {
    */
   set(index: number, count = 1): SparseIndices {
     return this._set(index, count);
-  }
-
-  /**
-   * Deletes count values starting at index.
-   *
-   * That is, deletes all values in the range [index, index + count).
-   *
-   * @returns A SparseIndices describing the previous values' presence.
-   * Index 0 in the returned array corresponds to `index` in this array.
-   */
-  delete(index: number, count = 1): SparseIndices {
-    return this._delete(index, count);
   }
 
   protected construct(pairs: Pair<number>[]): this {

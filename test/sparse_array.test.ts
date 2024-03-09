@@ -57,11 +57,6 @@ function check(arr: SparseArray<string>, values: (string | null)[]) {
   validate(state);
 
   for (let i = 0; i < values.length; i++) {
-    const info = arr.hasGet(i);
-    if (values[i] === null) assert.deepStrictEqual(info, [false, undefined]);
-    else {
-      assert.deepStrictEqual(info, [true, values[i]!]);
-    }
     assert.strictEqual(arr.has(i), values[i] !== null);
     assert.strictEqual(arr.get(i), values[i] ?? undefined);
   }
@@ -70,7 +65,6 @@ function check(arr: SparseArray<string>, values: (string | null)[]) {
 
   // Queries should also work on indexes past the length.
   for (let i = 0; i < 10; i++) {
-    assert.deepStrictEqual(arr.hasGet(arr.length + i), [false, undefined]);
     assert.deepStrictEqual(arr.has(arr.length + i), false);
     assert.deepStrictEqual(arr.get(arr.length + i), undefined);
   }
@@ -561,11 +555,9 @@ describe("SparseArray", () => {
       for (const bad of [-1, 0.5, NaN]) {
         assert.throws(() => arr.has(bad));
         assert.throws(() => arr.get(bad));
-        assert.throws(() => arr.hasGet(bad));
       }
       assert.doesNotThrow(() => arr.has(18));
       assert.doesNotThrow(() => arr.get(18));
-      assert.doesNotThrow(() => arr.hasGet(18));
       assert.deepStrictEqual(arr.serialize(), initial);
 
       // findCount

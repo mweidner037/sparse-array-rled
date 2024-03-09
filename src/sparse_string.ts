@@ -44,7 +44,7 @@ export class SparseString extends SparseItems<string> {
    * Returns a new, empty SparseString.
    */
   static new(): SparseString {
-    return new this([]);
+    return new SparseString([]);
   }
 
   /**
@@ -54,7 +54,7 @@ export class SparseString extends SparseItems<string> {
    * @throws If the serialized form is invalid (see `SparseString.serialize`).
    */
   static deserialize(serialized: SerializedSparseString): SparseString {
-    return new this(deserializeItems(serialized, stringItemer));
+    return new SparseString(deserializeItems(serialized, stringItemer));
   }
 
   /**
@@ -88,7 +88,7 @@ export class SparseString extends SparseItems<string> {
       curLength = index + 1;
     }
 
-    return new this(pairs);
+    return new SparseString(pairs);
   }
 
   /**
@@ -105,26 +105,15 @@ export class SparseString extends SparseItems<string> {
   }
 
   /**
-   * Returns whether the char at index is present, and if so, its value.
-   *
-   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
-   */
-  hasGet(
-    index: number
-  ): [has: true, get: string] | [has: false, get: undefined] {
-    const located = this._get(index);
-    if (located === null) return [false, undefined];
-    const [item, offset] = located;
-    return [true, item[offset]];
-  }
-
-  /**
    * Returns the char at index, or undefined if not present.
    *
    * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
   get(index: number): string | undefined {
-    return this.hasGet(index)[1];
+    const located = this._get(index);
+    if (located === null) return undefined;
+    const [item, offset] = located;
+    return item[offset];
   }
 
   /**
@@ -179,18 +168,6 @@ export class SparseString extends SparseItems<string> {
    */
   set(index: number, chars: string): SparseString {
     return this._set(index, chars);
-  }
-
-  /**
-   * Deletes count chars starting at index.
-   *
-   * That is, deletes all chars in the range [index, index + count).
-   *
-   * @returns A sparse string of the previous values.
-   * Index 0 in the returned string corresponds to `index` in this array.
-   */
-  delete(index: number, count = 1): SparseString {
-    return this._delete(index, count);
   }
 
   protected construct(pairs: Pair<string>[]): this {

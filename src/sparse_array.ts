@@ -53,7 +53,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * Returns a new, empty SparseArray.
    */
   static new<T>(): SparseArray<T> {
-    return new this([]);
+    return new SparseArray([]);
   }
 
   // OPT: unsafe version that skips internal T[] clones?
@@ -65,7 +65,9 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * @throws If the serialized form is invalid (see `SparseArray.serialize`).
    */
   static deserialize<T>(serialized: SerializedSparseArray<T>): SparseArray<T> {
-    return new this(deserializeItems(serialized, arrayItemer as Itemer<T[]>));
+    return new SparseArray(
+      deserializeItems(serialized, arrayItemer as Itemer<T[]>)
+    );
   }
 
   /**
@@ -99,7 +101,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
       curLength = index + 1;
     }
 
-    return new this(pairs);
+    return new SparseArray(pairs);
   }
 
   /**
@@ -116,24 +118,15 @@ export class SparseArray<T> extends SparseItems<T[]> {
   }
 
   /**
-   * Returns whether the value at index is present, and if so, its value.
-   *
-   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
-   */
-  hasGet(index: number): [has: true, get: T] | [has: false, get: undefined] {
-    const located = this._get(index);
-    if (located === null) return [false, undefined];
-    const [item, offset] = located;
-    return [true, item[offset]];
-  }
-
-  /**
    * Returns the value at index, or undefined if not present.
    *
    * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
   get(index: number): T | undefined {
-    return this.hasGet(index)[1];
+    const located = this._get(index);
+    if (located === null) return undefined;
+    const [item, offset] = located;
+    return item[offset];
   }
 
   /**
@@ -188,18 +181,6 @@ export class SparseArray<T> extends SparseItems<T[]> {
    */
   set(index: number, ...values: T[]): SparseArray<T> {
     return this._set(index, values);
-  }
-
-  /**
-   * Deletes count values starting at index.
-   *
-   * That is, deletes all values in the range [index, index + count).
-   *
-   * @returns A sparse array of the previous values.
-   * Index 0 in the returned array corresponds to `index` in this array.
-   */
-  delete(index: number, count = 1): SparseArray<T> {
-    return this._delete(index, count);
   }
 
   protected construct(pairs: Pair<T[]>[]): this {
