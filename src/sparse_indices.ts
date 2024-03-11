@@ -2,7 +2,17 @@ import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
 import { checkIndex } from "./util";
 
 /**
- * See SparseIndices.serialize.
+ * Serialized form of a SparseIndices.
+ *
+ * The serialized form uses a compact JSON representation with run-length encoding. It alternates between:
+ * - counts of present values (even indices), and
+ * - counts of deleted values (odd indices).
+ *
+ * For example, the sparse array `[true, true, , , , true, true]` serializes to `[2, 3, 2]`.
+ *
+ * Trivial entries (0s & trailing deletions) are always omitted,
+ * except that the 0th entry may be 0.
+ * For example, the sparse array `[, , true, true, true]` serializes to `[0, 2, 3]`.
  */
 export type SerializedSparseIndices = Array<number>;
 
@@ -35,6 +45,8 @@ export interface IndicesSlicer {
  * This typically uses 4x less memory and results in smaller JSON.
  */
 export class SparseIndices extends SparseItems<number> {
+  // So list-positions can refer to unbound versions, we avoid using
+  // "this" in static methods.
   /**
    * Returns a new, empty SparseIndices.
    */
@@ -85,13 +97,9 @@ export class SparseIndices extends SparseItems<number> {
   }
 
   /**
-   * Returns a compact JSON-serializable representation of our state.
+   * Returns a compact JSON representation of our state.
    *
-   * The return value uses a run-length encoding: it alternates between
-   * - counts of present values (even indices), and
-   * - counts of deleted values (odd indices).
-   *
-   * For example, the sparse array `[true, true, , , , true, true]` serializes to `[2, 3, 2]`.
+   * See SerializedSparseIndices for a description of the format.
    */
   serialize(): SerializedSparseIndices {
     return super.serialize();
@@ -143,11 +151,8 @@ export class SparseIndices extends SparseItems<number> {
 }
 
 const indexesItemer: Itemer<number> = {
-  isValid(allegedItem: unknown, emptyOkay: boolean): boolean {
-    return (
-      Number.isSafeInteger(allegedItem) &&
-      (<number>allegedItem > 0 || (emptyOkay && allegedItem === 0))
-    );
+  isValid(allegedItem: unknown): boolean {
+    return Number.isSafeInteger(allegedItem) && <number>allegedItem >= 0;
   },
 
   newEmpty(): number {

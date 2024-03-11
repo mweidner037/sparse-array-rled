@@ -2,7 +2,18 @@ import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
 import { checkIndex } from "./util";
 
 /**
- * See SparseArray.serialize.
+ * Serialized form of a `SparseArray<T>`.
+ *
+ * The serialized form uses a compact JSON representation with run-length encoded deletions. It alternates between:
+ * - arrays of present values (even indices), and
+ * - numbers (odd indices), representing that number of deleted values.
+ *
+ * For example, the sparse array `["foo", "bar", , , , "X", "yy"]` serializes to
+ * `[["foo", "bar"], 3, ["X", "yy"]]`.
+ *
+ * Trivial entries (empty arrays, 0s, & trailing deletions) are always omitted,
+ * except that the 0th entry may be an empty array.
+ * For example, the sparse array `[, , "biz", "baz"]` serializes to `[[], 2, ["biz", "baz"]]`.
  */
 export type SerializedSparseArray<T> = Array<T[] | number>;
 
@@ -49,6 +60,8 @@ export interface ArraySlicer<T> {
  * @see SparseIndices To track a sparse array's present indices independent of its values.
  */
 export class SparseArray<T> extends SparseItems<T[]> {
+  // So list-positions can refer to unbound versions, we avoid using
+  // "this" in static methods.
   /**
    * Returns a new, empty SparseArray.
    */
@@ -105,13 +118,9 @@ export class SparseArray<T> extends SparseItems<T[]> {
   }
 
   /**
-   * Returns a compact JSON-serializable representation of our state.
+   * Returns a compact JSON representation of our state.
    *
-   * The return value uses a run-length encoding: it alternates between
-   * - arrays of present values (even indices), and
-   * - numbers (odd indices), representing that number of deleted values.
-   *
-   * For example, the sparse array `["foo", "bar", , , , "X", "yy"]` serializes to `[["foo", "bar"], 3, ["X", "yy"]]`.
+   * See SerializedSparseArray for a description of the format.
    */
   serialize(): SerializedSparseArray<T> {
     return super.serialize();
@@ -193,10 +202,8 @@ export class SparseArray<T> extends SparseItems<T[]> {
 }
 
 const arrayItemer: Itemer<unknown[]> = {
-  isValid(allegedItem: unknown, emptyOkay: boolean): boolean {
-    return (
-      Array.isArray(allegedItem) && (allegedItem.length !== 0 || emptyOkay)
-    );
+  isValid(allegedItem: unknown): boolean {
+    return Array.isArray(allegedItem);
   },
 
   newEmpty(): unknown[] {

@@ -2,7 +2,17 @@ import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
 import { checkIndex } from "./util";
 
 /**
- * See SparseString.serialize.
+ * Serialized form of a SparseString.
+ *
+ * The serialized form uses a compact JSON representation with run-length encoded deletions. It alternates between:
+ * - strings of concatenated present chars (even indices), and
+ * - numbers (odd indices), representing that number of deleted values.
+ *
+ * For example, the sparse string `["a", "b", , , , "f", "g"]` serializes to `["ab", 3, "fg"]`.
+ *
+ * Trivial entries (empty strings, 0s, & trailing deletions) are always omitted,
+ * except that the 0th entry may be an empty string.
+ * For example, the sparse array `[, , "x", "y"]` serializes to `["", 2, "xy"]`.
  */
 export type SerializedSparseString = Array<string | number>;
 
@@ -40,6 +50,8 @@ export interface StringSlicer {
  * @see SparseIndices To track a sparse array's present indices independent of its values.
  */
 export class SparseString extends SparseItems<string> {
+  // So list-positions can refer to unbound versions, we avoid using
+  // "this" in static methods.
   /**
    * Returns a new, empty SparseString.
    */
@@ -92,13 +104,9 @@ export class SparseString extends SparseItems<string> {
   }
 
   /**
-   * Returns a compact JSON-serializable representation of our state.
+   * Returns a compact JSON representation of our state.
    *
-   * The return value uses a run-length encoding: it alternates between
-   * - strings of concatenated present chars (even indices), and
-   * - numbers (odd indices), representing that number of deleted chars.
-   *
-   * For example, the sparse string `["a", "b", , , , "f", "g"]` serializes to `["ab", 3, "fg"]`.
+   * See SerializedSparseString for a description of the format.
    */
   serialize(): SerializedSparseString {
     return super.serialize();
@@ -180,10 +188,8 @@ export class SparseString extends SparseItems<string> {
 }
 
 const stringItemer: Itemer<string> = {
-  isValid(allegedItem: unknown, emptyOkay: boolean): boolean {
-    return (
-      typeof allegedItem === "string" && (allegedItem.length !== 0 || emptyOkay)
-    );
+  isValid(allegedItem: unknown): boolean {
+    return typeof allegedItem === "string";
   },
 
   newEmpty(): string {

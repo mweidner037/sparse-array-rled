@@ -19,7 +19,7 @@ export interface Itemer<I> {
    * Return whether it could actually be an item. Called on user-provided
    * serialized states, which could be corrupt.
    */
-  isValid(allegedItem: unknown, emptyOkay: boolean): boolean;
+  isValid(allegedItem: unknown): boolean;
 
   /**
    * Returns a new empty item.
@@ -743,11 +743,16 @@ export function deserializeItems<I>(
   for (let j = 0; j < serialized.length; j++) {
     if (j % 2 === 0) {
       const item = serialized[j] as I;
-      if (!itemer.isValid(item, j === 0)) {
+      if (!itemer.isValid(item)) {
         throw new Error(`Invalid item at serialized[${j}]: ${item}`);
       }
       const itemLength = itemer.length(item);
-      if (itemLength === 0) continue;
+      if (itemLength === 0) {
+        if (j === 0) continue;
+        else {
+          throw new Error(`Invalid empty item at serialized[${j}]`);
+        }
+      }
       pairs.push({ index: nextIndex, item: itemer.slice(item) });
       nextIndex += itemLength;
     } else {
