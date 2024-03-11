@@ -485,7 +485,7 @@ export abstract class SparseItems<I> {
    *
    * @throws If `index < 0` or `count < 0`. (It is okay if the range extends beyond `this.length`.)
    */
-  delete(index: number, count: number): this {
+  delete(index: number, count = 1): this {
     checkIndex(index);
     checkIndex(count, "count");
 
