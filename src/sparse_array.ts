@@ -138,30 +138,6 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return item[offset];
   }
 
-  /**
-   * Finds the index corresponding to the given count.
-   *
-   * That is, we advance through the array
-   * until reaching the `count`-th present value, returning its index.
-   * If the array ends before finding such a value, returns null.
-   *
-   * Invert with countAt.
-   *
-   * @param startIndex Index to start searching. If specified, only indices >= startIndex
-   * contribute towards `count`.
-   *
-   * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
-   */
-  findCount(
-    count: number,
-    startIndex?: number
-  ): [index: number, value: T] | null {
-    const located = this._findCount(count, startIndex);
-    if (located === null) return null;
-    const [index, item, offset] = located;
-    return [index, item[offset]];
-  }
-
   newSlicer(): ArraySlicer<T> {
     return super.newSlicer();
   }

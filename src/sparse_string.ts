@@ -124,30 +124,6 @@ export class SparseString extends SparseItems<string> {
     return item[offset];
   }
 
-  /**
-   * Finds the index corresponding to the given count.
-   *
-   * That is, we advance through the string
-   * until reaching the `count`-th present char, returning its index.
-   * If the string ends before finding such a char, returns null.
-   *
-   * Invert with countAt.
-   *
-   * @param startIndex Index to start searching. If specified, only indices >= startIndex
-   * contribute towards `count`.
-   *
-   * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
-   */
-  findCount(
-    count: number,
-    startIndex?: number
-  ): [index: number, char: string] | null {
-    const located = this._findCount(count, startIndex);
-    if (located === null) return null;
-    const [index, item, offset] = located;
-    return [index, item[offset]];
-  }
-
   newSlicer(): StringSlicer {
     return super.newSlicer();
   }

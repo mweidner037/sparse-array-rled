@@ -273,7 +273,7 @@ export abstract class SparseItems<I> {
    * Equivalent, it is the `c` such that index is
    * the `c`-th present value (or would be if present).
    *
-   * Invert with findCount.
+   * Invert with indexOfCount.
    *
    * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
@@ -330,32 +330,31 @@ export abstract class SparseItems<I> {
   }
 
   /**
-   * @ignore Internal templated version of `findCount`.
+   * @ignore Internal optimized combination of `get` and `indexOfCount`.
    *
-   * Finds the index corresponding to the given count.
+   * Returns the value at the given count and its index,
+   * in the form [item, offset within item, index].
    *
    * That is, we advance through the array
-   * until reaching the `count`-th present value, returning its index.
+   * until reaching the `count`-th present value, returning its value and index.
    * If the array ends before finding such a value, returns null.
-   *
-   * Invert with countAt.
    *
    * @param startIndex Index to start searching. If specified, only indices >= startIndex
    * contribute towards `count`.
    *
    * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
    */
-  _findCount(
+  _getAtCount(
     count: number,
     startIndex = 0
-  ): [index: number, item: I, offset: number] | null {
+  ): [item: I, offset: number, index: number] | null {
     checkIndex(count, "count");
     checkIndex(startIndex, "startIndex");
 
     if (this._normalItem !== null) {
       const index = startIndex + count;
       return index < this.itemer().length(this._normalItem)
-        ? [index, this._normalItem, index]
+        ? [this._normalItem, index, index]
         : null;
     }
 
@@ -375,11 +374,31 @@ export abstract class SparseItems<I> {
     for (; i < pairs.length; i++) {
       const itemLength = this.itemer().length(pairs[i].item);
       if (countRemaining < itemLength) {
-        return [pairs[i].index + countRemaining, pairs[i].item, countRemaining];
+        return [pairs[i].item, countRemaining, pairs[i].index + countRemaining];
       }
       countRemaining -= itemLength;
     }
     return null;
+  }
+
+  /**
+   * Finds the index corresponding to the given count.
+   *
+   * That is, we advance through the array
+   * until reaching the `count`-th present value, returning its index.
+   * If the array ends before finding such a value, returns -1.
+   *
+   * Invert with countAt.
+   *
+   * @param startIndex Index to start searching. If specified, only indices >= startIndex
+   * contribute towards `count`.
+   *
+   * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
+   */
+  indexOfCount(count: number, startIndex = 0): number {
+    const located = this._getAtCount(count, startIndex);
+    if (located === null) return -1;
+    return located[2];
   }
 
   /**
@@ -725,7 +744,7 @@ export abstract class SparseItems<I> {
  * Templated implementation of deserialization
  *
  * Each subclass implements a static `deserialize` method as
- * `return new <class>(...deserializeItems(serialized, <class's itemer>))`.
+ * `return new <class>(deserializeItems(serialized, <class's itemer>))`.
  */
 export function deserializeItems<I>(
   serialized: (I | number)[],

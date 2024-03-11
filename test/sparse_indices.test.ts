@@ -190,7 +190,7 @@ class Checker {
   }
 
   /**
-   * Test all findCountIndex inputs and some newSlicer walks.
+   * Test all _getAtCount inputs and some newSlicer walks.
    *
    * More expensive (O(length^2) ops), so only call occasionally,
    * in "interesting" states.
@@ -211,7 +211,7 @@ class Checker {
     const arr2 = SparseIndices.fromKeys(keys);
     check(arr2, this.values);
 
-    // Test findCount.
+    // Test _getAtCount.
     for (
       let startIndex = 0;
       startIndex < this.values.length + 2;
@@ -229,10 +229,18 @@ class Checker {
         }
         if (index >= this.values.length) {
           // count is too large - not found.
-          assert.deepStrictEqual(this.arr.findCount(count, startIndex), null);
+          assert.deepStrictEqual(this.arr._getAtCount(count, startIndex), null);
+          assert.strictEqual(this.arr.indexOfCount(count, startIndex), -1);
         } else {
           // Answer is index.
-          assert.deepStrictEqual(this.arr.findCount(count, startIndex), index);
+          const actual = this.arr._getAtCount(count, startIndex);
+          assert.isNotNull(actual);
+          const [item, offset, actualIndex] = actual!;
+          assert.deepStrictEqual(
+            [true, actualIndex],
+            [this.values[index] !== null, index]
+          );
+          assert.strictEqual(this.arr.indexOfCount(count, startIndex), index);
         }
       }
     }
@@ -421,7 +429,7 @@ describe("SparseIndices", () => {
       // Values [null, "x"].
       const arr = SparseIndices.new();
       arr.set(1, 1);
-      assert.deepStrictEqual(arr.findCount(0), 1);
+      assert.deepStrictEqual(arr.indexOfCount(0), 1);
     });
 
     const ALL_LENGTH = 7;
@@ -548,14 +556,14 @@ describe("SparseIndices", () => {
       assert.doesNotThrow(() => arr.has(18));
       assert.deepStrictEqual(arr.serialize(), initial);
 
-      // findCount
+      // indexOfCount
       for (const bad of [-1, 0.5, NaN]) {
-        assert.throws(() => arr.findCount(bad, 3));
+        assert.throws(() => arr.indexOfCount(bad, 3));
       }
       for (const bad of [-1, 0.5, NaN]) {
-        assert.throws(() => arr.findCount(0, bad));
+        assert.throws(() => arr.indexOfCount(0, bad));
       }
-      assert.doesNotThrow(() => arr.findCount(15, 18));
+      assert.doesNotThrow(() => arr.indexOfCount(15, 18));
       assert.deepStrictEqual(arr.serialize(), initial);
 
       // set and delete

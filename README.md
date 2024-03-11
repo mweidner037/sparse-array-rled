@@ -101,11 +101,11 @@ arr2.countBetween(0, 4); // 2
 arr2.countAt(4); // 2
 arr2.countAt(6); // 3
 
-// Find the c-th present entry.
-arr2.findCount(1); // [1, 'f']
-arr2.findCount(2); // [5, 'g']
-arr2.findCount(5); // null
-arr2.findCount(1000); // null
+// Find the c-th present index, or -1 if c is too large.
+arr2.indexOfCount(1); // 1
+arr2.indexOfCount(2); // 5
+arr2.indexOfCount(5); // -1
+arr2.indexOfCount(1000); // -1
 ```
 
 Bulk mutations are specially optimized:
