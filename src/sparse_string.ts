@@ -2,7 +2,17 @@ import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
 import { checkIndex } from "./util";
 
 /**
- * See SparseString.serialize.
+ * Serialized form of a SparseString.
+ *
+ * The serialized form uses a compact JSON representation with run-length encoded deletions. It alternates between:
+ * - strings of concatenated present chars (even indices), and
+ * - numbers (odd indices), representing that number of deleted values.
+ *
+ * For example, the sparse string `["a", "b", , , , "f", "g"]` serializes to `["ab", 3, "fg"]`.
+ *
+ * Trivial entries (empty strings, 0s, & trailing deletions) are always omitted,
+ * except that the 0th entry may be an empty string.
+ * For example, the sparse array `[, , "x", "y"]` serializes to `["", 2, "xy"]`.
  */
 export type SerializedSparseString = Array<string | number>;
 
@@ -40,11 +50,13 @@ export interface StringSlicer {
  * @see SparseIndices To track a sparse array's present indices independent of its values.
  */
 export class SparseString extends SparseItems<string> {
+  // So list-positions can refer to unbound versions, we avoid using
+  // "this" in static methods.
   /**
    * Returns a new, empty SparseString.
    */
   static new(): SparseString {
-    return new this([]);
+    return new SparseString([]);
   }
 
   /**
@@ -54,7 +66,7 @@ export class SparseString extends SparseItems<string> {
    * @throws If the serialized form is invalid (see `SparseString.serialize`).
    */
   static deserialize(serialized: SerializedSparseString): SparseString {
-    return new this(deserializeItems(serialized, stringItemer));
+    return new SparseString(deserializeItems(serialized, stringItemer));
   }
 
   /**
@@ -88,34 +100,16 @@ export class SparseString extends SparseItems<string> {
       curLength = index + 1;
     }
 
-    return new this(pairs);
+    return new SparseString(pairs);
   }
 
   /**
-   * Returns a compact JSON-serializable representation of our state.
+   * Returns a compact JSON representation of our state.
    *
-   * The return value uses a run-length encoding: it alternates between
-   * - strings of concatenated present chars (even indices), and
-   * - numbers (odd indices), representing that number of deleted chars.
-   *
-   * For example, the sparse string `["a", "b", , , , "f", "g"]` serializes to `["ab", 3, "fg"]`.
+   * See SerializedSparseString for a description of the format.
    */
   serialize(): SerializedSparseString {
     return super.serialize();
-  }
-
-  /**
-   * Returns whether the char at index is present, and if so, its value.
-   *
-   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
-   */
-  hasGet(
-    index: number
-  ): [has: true, get: string] | [has: false, get: undefined] {
-    const located = this._get(index);
-    if (located === null) return [false, undefined];
-    const [item, offset] = located;
-    return [true, item[offset]];
   }
 
   /**
@@ -124,31 +118,10 @@ export class SparseString extends SparseItems<string> {
    * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
   get(index: number): string | undefined {
-    return this.hasGet(index)[1];
-  }
-
-  /**
-   * Finds the index corresponding to the given count.
-   *
-   * That is, we advance through the string
-   * until reaching the `count`-th present char, returning its index.
-   * If the string ends before finding such a char, returns null.
-   *
-   * Invert with countAt.
-   *
-   * @param startIndex Index to start searching. If specified, only indices >= startIndex
-   * contribute towards `count`.
-   *
-   * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
-   */
-  findCount(
-    count: number,
-    startIndex?: number
-  ): [index: number, char: string] | null {
-    const located = this._findCount(count, startIndex);
-    if (located === null) return null;
-    const [index, item, offset] = located;
-    return [index, item[offset]];
+    const located = this._get(index);
+    if (located === null) return undefined;
+    const [item, offset] = located;
+    return item[offset];
   }
 
   newSlicer(): StringSlicer {
@@ -181,18 +154,6 @@ export class SparseString extends SparseItems<string> {
     return this._set(index, chars);
   }
 
-  /**
-   * Deletes count chars starting at index.
-   *
-   * That is, deletes all chars in the range [index, index + count).
-   *
-   * @returns A sparse string of the previous values.
-   * Index 0 in the returned string corresponds to `index` in this array.
-   */
-  delete(index: number, count = 1): SparseString {
-    return this._delete(index, count);
-  }
-
   protected construct(pairs: Pair<string>[]): this {
     return new SparseString(pairs) as this;
   }
@@ -203,10 +164,8 @@ export class SparseString extends SparseItems<string> {
 }
 
 const stringItemer: Itemer<string> = {
-  isValid(allegedItem: unknown, emptyOkay: boolean): boolean {
-    return (
-      typeof allegedItem === "string" && (allegedItem.length !== 0 || emptyOkay)
-    );
+  isValid(allegedItem: unknown): boolean {
+    return typeof allegedItem === "string";
   },
 
   newEmpty(): string {

@@ -1,6 +1,5 @@
 import { SparseArray, SparseIndices, SparseString } from "../../src";
 import { Implementation } from "../util";
-import { ListPositionsImpl } from "./list_positions";
 import { PlainArray2Impl, PlainArrayImpl } from "./plain_array";
 import {
   WrapSparseArrayLike,
@@ -14,5 +13,4 @@ export const allImpls: Implementation[] = [
   WrapSparseIndicesLike(SparseIndices),
   PlainArrayImpl,
   PlainArray2Impl,
-  ListPositionsImpl,
 ];

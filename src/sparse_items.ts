@@ -19,7 +19,7 @@ export interface Itemer<I> {
    * Return whether it could actually be an item. Called on user-provided
    * serialized states, which could be corrupt.
    */
-  isValid(allegedItem: unknown, emptyOkay: boolean): boolean;
+  isValid(allegedItem: unknown): boolean;
 
   /**
    * Returns a new empty item.
@@ -240,17 +240,11 @@ export abstract class SparseItems<I> {
   }
 
   /**
-   * Returns the count at index, plus whether index is present.
-   *
-   * The "count at index" is the number of present values up to but excluding index.
-   * Equivalent, it is the `c` such that index is
-   * the `c`-th present value (or would be if present).
-   *
-   * Invert with findCount.
+   * @ignore Internal optimized combination of `countAt` and `has`.
    *
    * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
-  countAt(index: number): [count: number, has: boolean] {
+  _countHas(index: number): [count: number, has: boolean] {
     checkIndex(index);
 
     if (this._normalItem !== null) {
@@ -273,6 +267,21 @@ export abstract class SparseItems<I> {
   }
 
   /**
+   * Returns the count at index.
+   *
+   * The "count at index" is the number of present values up to but excluding index.
+   * Equivalent, it is the `c` such that index is
+   * the `c`-th present value (or would be if present).
+   *
+   * Invert with indexOfCount.
+   *
+   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
+   */
+  countAt(index: number): number {
+    return this._countHas(index)[0];
+  }
+
+  /**
    * Returns whether the array has no present values.
    *
    * Note that an array may be empty but have nonzero length.
@@ -286,11 +295,13 @@ export abstract class SparseItems<I> {
   }
 
   /**
+   * @ignore Internal templated version of `get`.
+   *
    * Returns the value at index, in the form [item, offset within item].
    *
    * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
-  protected _get(index: number): [item: I, offset: number] | null {
+  _get(index: number): [item: I, offset: number] | null {
     checkIndex(index);
 
     if (this._normalItem !== null) {
@@ -319,30 +330,31 @@ export abstract class SparseItems<I> {
   }
 
   /**
-   * Finds the index corresponding to the given count.
+   * @ignore Internal optimized combination of `get` and `indexOfCount`.
+   *
+   * Returns the value at the given count and its index,
+   * in the form [item, offset within item, index].
    *
    * That is, we advance through the array
-   * until reaching the `count`-th present value, returning its index.
+   * until reaching the `count`-th present value, returning its value and index.
    * If the array ends before finding such a value, returns null.
-   *
-   * Invert with countAt.
    *
    * @param startIndex Index to start searching. If specified, only indices >= startIndex
    * contribute towards `count`.
    *
    * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
    */
-  protected _findCount(
+  _getAtCount(
     count: number,
     startIndex = 0
-  ): [index: number, item: I, offset: number] | null {
+  ): [item: I, offset: number, index: number] | null {
     checkIndex(count, "count");
     checkIndex(startIndex, "startIndex");
 
     if (this._normalItem !== null) {
       const index = startIndex + count;
       return index < this.itemer().length(this._normalItem)
-        ? [index, this._normalItem, index]
+        ? [this._normalItem, index, index]
         : null;
     }
 
@@ -362,11 +374,31 @@ export abstract class SparseItems<I> {
     for (; i < pairs.length; i++) {
       const itemLength = this.itemer().length(pairs[i].item);
       if (countRemaining < itemLength) {
-        return [pairs[i].index + countRemaining, pairs[i].item, countRemaining];
+        return [pairs[i].item, countRemaining, pairs[i].index + countRemaining];
       }
       countRemaining -= itemLength;
     }
     return null;
+  }
+
+  /**
+   * Finds the index corresponding to the given count.
+   *
+   * That is, we advance through the array
+   * until reaching the `count`-th present value, returning its index.
+   * If the array ends before finding such a value, returns -1.
+   *
+   * Invert with countAt.
+   *
+   * @param startIndex Index to start searching. If specified, only indices >= startIndex
+   * contribute towards `count`.
+   *
+   * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
+   */
+  indexOfCount(count: number, startIndex = 0): number {
+    const located = this._getAtCount(count, startIndex);
+    if (located === null) return -1;
+    return located[2];
   }
 
   /**
@@ -453,7 +485,7 @@ export abstract class SparseItems<I> {
    *
    * @throws If `index < 0` or `count < 0`. (It is okay if the range extends beyond `this.length`.)
    */
-  protected _delete(index: number, count: number): this {
+  delete(index: number, count = 1): this {
     checkIndex(index);
     checkIndex(count, "count");
 
@@ -559,6 +591,8 @@ export abstract class SparseItems<I> {
   }
 
   /**
+   * @ignore Internal templated version of `set`.
+   *
    * Sets values starting at index.
    *
    * That is, sets all values in the range [index, index + item.length) to the
@@ -569,7 +603,7 @@ export abstract class SparseItems<I> {
    *
    * @throws If `index < 0`. (It is okay if the range extends beyond `this.length`.)
    */
-  protected _set(index: number, item: I): this {
+  _set(index: number, item: I): this {
     checkIndex(index);
 
     const count = this.itemer().length(item);
@@ -710,7 +744,7 @@ export abstract class SparseItems<I> {
  * Templated implementation of deserialization
  *
  * Each subclass implements a static `deserialize` method as
- * `return new this(...deserializeItems(serialized, <class's itemer>))`.
+ * `return new <class>(deserializeItems(serialized, <class's itemer>))`.
  */
 export function deserializeItems<I>(
   serialized: (I | number)[],
@@ -728,11 +762,16 @@ export function deserializeItems<I>(
   for (let j = 0; j < serialized.length; j++) {
     if (j % 2 === 0) {
       const item = serialized[j] as I;
-      if (!itemer.isValid(item, j === 0)) {
+      if (!itemer.isValid(item)) {
         throw new Error(`Invalid item at serialized[${j}]: ${item}`);
       }
       const itemLength = itemer.length(item);
-      if (itemLength === 0) continue;
+      if (itemLength === 0) {
+        if (j === 0) continue;
+        else {
+          throw new Error(`Invalid empty item at serialized[${j}]`);
+        }
+      }
       pairs.push({ index: nextIndex, item: itemer.slice(item) });
       nextIndex += itemLength;
     } else {

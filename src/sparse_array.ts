@@ -2,7 +2,18 @@ import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
 import { checkIndex } from "./util";
 
 /**
- * See SparseArray.serialize.
+ * Serialized form of a `SparseArray<T>`.
+ *
+ * The serialized form uses a compact JSON representation with run-length encoded deletions. It alternates between:
+ * - arrays of present values (even indices), and
+ * - numbers (odd indices), representing that number of deleted values.
+ *
+ * For example, the sparse array `["foo", "bar", , , , "X", "yy"]` serializes to
+ * `[["foo", "bar"], 3, ["X", "yy"]]`.
+ *
+ * Trivial entries (empty arrays, 0s, & trailing deletions) are always omitted,
+ * except that the 0th entry may be an empty array.
+ * For example, the sparse array `[, , "biz", "baz"]` serializes to `[[], 2, ["biz", "baz"]]`.
  */
 export type SerializedSparseArray<T> = Array<T[] | number>;
 
@@ -49,11 +60,13 @@ export interface ArraySlicer<T> {
  * @see SparseIndices To track a sparse array's present indices independent of its values.
  */
 export class SparseArray<T> extends SparseItems<T[]> {
+  // So list-positions can refer to unbound versions, we avoid using
+  // "this" in static methods.
   /**
    * Returns a new, empty SparseArray.
    */
   static new<T>(): SparseArray<T> {
-    return new this([]);
+    return new SparseArray([]);
   }
 
   // OPT: unsafe version that skips internal T[] clones?
@@ -65,7 +78,9 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * @throws If the serialized form is invalid (see `SparseArray.serialize`).
    */
   static deserialize<T>(serialized: SerializedSparseArray<T>): SparseArray<T> {
-    return new this(deserializeItems(serialized, arrayItemer as Itemer<T[]>));
+    return new SparseArray(
+      deserializeItems(serialized, arrayItemer as Itemer<T[]>)
+    );
   }
 
   /**
@@ -99,32 +114,16 @@ export class SparseArray<T> extends SparseItems<T[]> {
       curLength = index + 1;
     }
 
-    return new this(pairs);
+    return new SparseArray(pairs);
   }
 
   /**
-   * Returns a compact JSON-serializable representation of our state.
+   * Returns a compact JSON representation of our state.
    *
-   * The return value uses a run-length encoding: it alternates between
-   * - arrays of present values (even indices), and
-   * - numbers (odd indices), representing that number of deleted values.
-   *
-   * For example, the sparse array `["foo", "bar", , , , "X", "yy"]` serializes to `[["foo", "bar"], 3, ["X", "yy"]]`.
+   * See SerializedSparseArray for a description of the format.
    */
   serialize(): SerializedSparseArray<T> {
     return super.serialize();
-  }
-
-  /**
-   * Returns whether the value at index is present, and if so, its value.
-   *
-   * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
-   */
-  hasGet(index: number): [has: true, get: T] | [has: false, get: undefined] {
-    const located = this._get(index);
-    if (located === null) return [false, undefined];
-    const [item, offset] = located;
-    return [true, item[offset]];
   }
 
   /**
@@ -133,31 +132,10 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
   get(index: number): T | undefined {
-    return this.hasGet(index)[1];
-  }
-
-  /**
-   * Finds the index corresponding to the given count.
-   *
-   * That is, we advance through the array
-   * until reaching the `count`-th present value, returning its index.
-   * If the array ends before finding such a value, returns null.
-   *
-   * Invert with countAt.
-   *
-   * @param startIndex Index to start searching. If specified, only indices >= startIndex
-   * contribute towards `count`.
-   *
-   * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
-   */
-  findCount(
-    count: number,
-    startIndex?: number
-  ): [index: number, value: T] | null {
-    const located = this._findCount(count, startIndex);
-    if (located === null) return null;
-    const [index, item, offset] = located;
-    return [index, item[offset]];
+    const located = this._get(index);
+    if (located === null) return undefined;
+    const [item, offset] = located;
+    return item[offset];
   }
 
   newSlicer(): ArraySlicer<T> {
@@ -190,18 +168,6 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return this._set(index, values);
   }
 
-  /**
-   * Deletes count values starting at index.
-   *
-   * That is, deletes all values in the range [index, index + count).
-   *
-   * @returns A sparse array of the previous values.
-   * Index 0 in the returned array corresponds to `index` in this array.
-   */
-  delete(index: number, count = 1): SparseArray<T> {
-    return this._delete(index, count);
-  }
-
   protected construct(pairs: Pair<T[]>[]): this {
     return new SparseArray(pairs) as this;
   }
@@ -212,10 +178,8 @@ export class SparseArray<T> extends SparseItems<T[]> {
 }
 
 const arrayItemer: Itemer<unknown[]> = {
-  isValid(allegedItem: unknown, emptyOkay: boolean): boolean {
-    return (
-      Array.isArray(allegedItem) && (allegedItem.length !== 0 || emptyOkay)
-    );
+  isValid(allegedItem: unknown): boolean {
+    return Array.isArray(allegedItem);
   },
 
   newEmpty(): unknown[] {

@@ -105,5 +105,5 @@ export async function textTrace(
   }
 }
 
-// TODO: get, countAt, findCount benchmarks. Compare get perf for pairs vs two arrays (latter might avoid pointer-chasing indexes).
+// TODO: get, countAt, indexOfCount benchmarks. Compare get perf for pairs vs two arrays (latter might avoid pointer-chasing indexes).
 // TODO: serialized size benchmarks? Since that's one of our claims over plain arrays. Likewise for load/save time.

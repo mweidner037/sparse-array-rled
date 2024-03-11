@@ -57,11 +57,6 @@ function check(arr: SparseString, values: (string | null)[]) {
   validate(state);
 
   for (let i = 0; i < values.length; i++) {
-    const info = arr.hasGet(i);
-    if (values[i] === null) assert.deepStrictEqual(info, [false, undefined]);
-    else {
-      assert.deepStrictEqual(info, [true, values[i]!]);
-    }
     assert.strictEqual(arr.has(i), values[i] !== null);
     assert.strictEqual(arr.get(i), values[i] ?? undefined);
   }
@@ -70,7 +65,6 @@ function check(arr: SparseString, values: (string | null)[]) {
 
   // Queries should also work on indexes past the length.
   for (let i = 0; i < 10; i++) {
-    assert.deepStrictEqual(arr.hasGet(arr.length + i), [false, undefined]);
     assert.deepStrictEqual(arr.has(arr.length + i), false);
     assert.deepStrictEqual(arr.get(arr.length + i), undefined);
   }
@@ -194,7 +188,7 @@ class Checker {
   }
 
   /**
-   * Test all findCountIndex inputs and some newSlicer walks.
+   * Test all _getAtCount inputs and some newSlicer walks.
    *
    * More expensive (O(length^2) ops), so only call occasionally,
    * in "interesting" states.
@@ -218,7 +212,7 @@ class Checker {
     const arr2 = SparseString.fromEntries(entries);
     check(arr2, this.values);
 
-    // Test findCount.
+    // Test _getAtCount.
     for (
       let startIndex = 0;
       startIndex < this.values.length + 2;
@@ -236,13 +230,18 @@ class Checker {
         }
         if (index >= this.values.length) {
           // count is too large - not found.
-          assert.deepStrictEqual(this.arr.findCount(count, startIndex), null);
+          assert.deepStrictEqual(this.arr._getAtCount(count, startIndex), null);
+          assert.strictEqual(this.arr.indexOfCount(count, startIndex), -1);
         } else {
           // Answer is index.
-          assert.deepStrictEqual(this.arr.findCount(count, startIndex), [
-            index,
-            this.values[index],
-          ]);
+          const actual = this.arr._getAtCount(count, startIndex);
+          assert.isNotNull(actual);
+          const [item, offset, actualIndex] = actual!;
+          assert.deepStrictEqual(
+            [item[offset], actualIndex],
+            [this.values[index], index]
+          );
+          assert.strictEqual(this.arr.indexOfCount(count, startIndex), index);
         }
       }
     }
@@ -252,7 +251,7 @@ class Checker {
     assert.strictEqual(this.arr.count(), valuesCount);
     assert.strictEqual(this.arr.isEmpty(), valuesCount === 0);
     for (let i = 0; i < this.values.length + 2; i++) {
-      assert.deepStrictEqual(this.arr.countAt(i), [
+      assert.deepStrictEqual(this.arr._countHas(i), [
         countBetween(this.values, 0, i),
         i < this.values.length && this.values[i] !== null,
       ]);
@@ -431,7 +430,7 @@ describe("SparseString", () => {
       // Values [null, "x"].
       const arr = SparseString.new();
       arr.set(1, "x");
-      assert.deepStrictEqual(arr.findCount(0), [1, "x"]);
+      assert.deepStrictEqual(arr.indexOfCount(0), 1);
     });
 
     const ALL_LENGTH = 7;
@@ -555,21 +554,19 @@ describe("SparseString", () => {
       for (const bad of [-1, 0.5, NaN]) {
         assert.throws(() => arr.has(bad));
         assert.throws(() => arr.get(bad));
-        assert.throws(() => arr.hasGet(bad));
       }
       assert.doesNotThrow(() => arr.has(18));
       assert.doesNotThrow(() => arr.get(18));
-      assert.doesNotThrow(() => arr.hasGet(18));
       assert.deepStrictEqual(arr.serialize(), initial);
 
-      // findCount
+      // indexOfCount
       for (const bad of [-1, 0.5, NaN]) {
-        assert.throws(() => arr.findCount(bad, 3));
+        assert.throws(() => arr.indexOfCount(bad, 3));
       }
       for (const bad of [-1, 0.5, NaN]) {
-        assert.throws(() => arr.findCount(0, bad));
+        assert.throws(() => arr.indexOfCount(0, bad));
       }
-      assert.doesNotThrow(() => arr.findCount(15, 18));
+      assert.doesNotThrow(() => arr.indexOfCount(15, 18));
       assert.deepStrictEqual(arr.serialize(), initial);
 
       // set and delete
