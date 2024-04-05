@@ -133,7 +133,7 @@ console.log(previous.length); // Prints 2 (last present index + 1) - not necessa
 
 ### Serialized form
 
-The serialized form uses run-length encoded deletions. Specifically, it is an array that alternates between:
+The serialized form, `SerializedSparseArray<T>`, uses run-length encoded deletions. Specifically, it is an array that alternates between:
 
 - arrays of present values (even indices), and
 - numbers (odd indices), representing that number of deleted values.
