@@ -15,7 +15,7 @@ import { checkIndex } from "./util";
  * except that the 0th entry may be an empty array.
  * For example, the sparse array `[, , "biz", "baz"]` serializes to `[[], 2, ["biz", "baz"]]`.
  */
-export type SerializedSparseArray<T> = Array<T[] | number>;
+export type SerializedSparseArray<T> = (T[] | number)[];
 
 /**
  * Iterator-like object returned by SparseArray.newSlicer().

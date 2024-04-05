@@ -12,9 +12,9 @@ import { checkIndex } from "./util";
  *
  * Trivial entries (empty strings, 0s, & trailing deletions) are always omitted,
  * except that the 0th entry may be an empty string.
- * For example, the sparse array `[, , "x", "y"]` serializes to `["", 2, "xy"]`.
+ * For example, the sparse string `[, , "x", "y"]` serializes to `["", 2, "xy"]`.
  */
-export type SerializedSparseString = Array<string | number>;
+export type SerializedSparseString = (string | number)[];
 
 /**
  * Iterator-like object returned by SparseText.newSlicer().
