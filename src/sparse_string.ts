@@ -6,7 +6,7 @@ import { checkIndex } from "./util";
  *
  * The serialized form uses a compact JSON representation with run-length encoded deletions. It alternates between:
  * - strings of concatenated present chars (even indices), and
- * - numbers (odd indices), representing that number of deleted values.
+ * - numbers (odd indices), representing that number of deleted chars.
  *
  * For example, the sparse string `["a", "b", , , , "f", "g"]` serializes to `["ab", 3, "fg"]`.
  *
@@ -144,7 +144,7 @@ export class SparseString extends SparseItems<string> {
   /**
    * Sets chars starting at index.
    *
-   * That is, sets all chars in the range [index, index + values.length) to the
+   * That is, sets all values in the range [index, index + chars.length) to the
    * given chars.
    *
    * @returns A sparse string of the previous values.
