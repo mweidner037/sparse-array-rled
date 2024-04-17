@@ -156,7 +156,7 @@ Deserialize with `const arr3 = SparseArray.fromSerialized(serialized)`.
 
 ### Iterators
 
-`entries()` and `keys()` have the same signature as `Array`, but they do **not** visit empty slots (as seen in the code snippets above).
+`entries()` and `keys()` have the same signature as `Array`, but they do **not** visit empty slots (as seen in the code snippets above). `items()` is an optimized alternative that iterates over runs of present values.
 
 `newSlicer()` is an additional iterator that lets you iterate through the array one "slice" at a time.
 
