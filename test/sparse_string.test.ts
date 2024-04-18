@@ -212,6 +212,20 @@ class Checker {
     const arr2 = SparseString.fromEntries(entries);
     check(arr2, this.values);
 
+    // Test items.
+    const items = [...this.arr.items()];
+    let prevEnd = -1;
+    for (const [index, values] of items) {
+      assert.notStrictEqual(index, prevEnd);
+      for (let i = 0; i < values.length; i++) {
+        assert(this.values[index + i]);
+        assert.strictEqual(values[i], this.values[index + i]);
+      }
+      assert(!this.values[index + values.length]);
+
+      prevEnd = index + values.length;
+    }
+
     // Test _getAtCount.
     for (
       let startIndex = 0;

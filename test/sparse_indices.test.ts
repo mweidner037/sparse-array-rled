@@ -211,6 +211,19 @@ class Checker {
     const arr2 = SparseIndices.fromKeys(keys);
     check(arr2, this.values);
 
+    // Test items.
+    const items = [...this.arr.items()];
+    let prevEnd = -1;
+    for (const [index, values] of items) {
+      assert.notStrictEqual(index, prevEnd);
+      for (let i = 0; i < values; i++) {
+        assert(this.values[index + i]);
+      }
+      assert(!this.values[index + values]);
+
+      prevEnd = index + values;
+    }
+
     // Test _getAtCount.
     for (
       let startIndex = 0;

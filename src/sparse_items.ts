@@ -430,6 +430,18 @@ export abstract class SparseItems<I> {
   }
 
   /**
+   * Iterates over the present items, in order.
+   *
+   * Each item [index, values] indicates a run of present values starting at index,
+   * ending at a deleted index.
+   */
+  *items(): IterableIterator<[index: number, values: I]> {
+    for (const pair of this.asPairs()) {
+      yield [pair.index, this.itemer().slice(pair.item)];
+    }
+  }
+
+  /**
    * Returns a shallow copy of this array.
    */
   clone(): this {
