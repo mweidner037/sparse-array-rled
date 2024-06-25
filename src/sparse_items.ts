@@ -1,16 +1,6 @@
 import { checkIndex, nonNull } from "./util";
 
-/**
- * SparseItem's state is represented as an array of pairs { index, item },
- * indicating that item starts at index and ends at a deleted section.
- * Pairs are in order by index.
- */
-export interface Pair<I> {
-  index: number;
-  item: I;
-}
-
-// TODO: cleanup methods?
+// TODO: cleanup methods (including in impls)
 /**
  * Item-type-specific functions used by SparseItems.
  */
@@ -22,11 +12,6 @@ export interface Itemer<I> {
   isValid(allegedItem: unknown): boolean;
 
   /**
-   * Returns a new empty item.
-   */
-  newEmpty(): I;
-
-  /**
    * Returns the length of item.
    */
   length(item: I): number;
@@ -36,7 +21,14 @@ export interface Itemer<I> {
    *
    * May modify a in-place and return it.
    */
-  merge(a: I, b: I): I;
+  tryMerge(a: I, b: I): [success: boolean, merged: I];
+
+  /**
+   * Given 0 < index < item.length, returns items split from it at index.
+   *
+   * May modify item in-place and return it as left.
+   */
+  split(item: I, index: number): [left: I, right: I];
 
   /**
    * Returns a new (non-aliased) item representing the given slice.
@@ -63,6 +55,18 @@ export interface Itemer<I> {
   shorten(item: I, newLength: number): I;
 }
 
+class DeletedNode<I> {
+  next: Node<I> | null = null;
+  constructor(public length: number) {}
+}
+
+class PresentNode<I> {
+  next: Node<I> | null = null;
+  constructor(public item: I) {}
+}
+
+export type Node<I> = PresentNode<I> | DeletedNode<I>;
+
 /**
  * Generic type for output of SparseItems.newSlicer().
  *
@@ -84,10 +88,6 @@ export interface ItemSlicer<I> {
   nextSlice(endIndex: number | null): Array<[index: number, item: I]>;
 }
 
-// TODO: measure perf impacts:
-// - switch back to normalItem at end of set/delete, if possible.
-// - Don't set _pairs until forced (hidden class change).
-
 /**
  * Templated implementation of the published Sparse* classes.
  *
@@ -100,15 +100,7 @@ export interface ItemSlicer<I> {
  * @typeParam I The type of items. Items must never be null.
  */
 export abstract class SparseItems<I> {
-  // The internal state is either:
-  // - `_pairs: Pair<I>[], normalItem: null`: Default.
-  // - `_pairs: null, normalItem: I`: Storage-optimized alterntive for zero pairs or
-  // a single pair `{ index: 0, item: this.normalItem }`.
-  //
-  // This may switch between the two states at will.
-  // Use `asPairs()` and `forcePairs()` to be shielded from the details.
-  private _pairs: Pair<I>[] | null = null;
-  private _normalItem: I | null = null;
+  private next: Node<I> | null = null;
 
   /**
    * Constructs a SparseItems with the given state, performing no validation.
@@ -140,28 +132,11 @@ export abstract class SparseItems<I> {
    */
   protected abstract itemer(): Itemer<I>;
 
-  /**
-   * Returns a *read-only* (unsafe to mutate) copy of this's state as Pair<I>[],
-   * hiding details of the internal state (_normalItems).
-   */
-  protected asPairs(): readonly Pair<I>[] {
-    if (this._normalItem !== null) {
-      if (this.itemer().length(this._normalItem) === 0) return [];
-      else return [{ index: 0, item: this._normalItem }];
-    }
-    return nonNull(this._pairs);
-  }
-
-  /**
-   * Forces the internal state to use this._pairs if it is not already,
-   * and returns this._pairs.
-   */
-  private forcePairs(): Pair<I>[] {
-    if (this._pairs === null) {
-      this._pairs = this.asPairs() as Pair<I>[];
-      this._normalItem = null;
-    }
-    return this._pairs;
+  private nodeLength(node: Node<I>): number {
+    // TODO: way to optimize this?
+    return node instanceof DeletedNode
+      ? node.length
+      : this.itemer().length(node.item);
   }
 
   /**
@@ -175,65 +150,21 @@ export abstract class SparseItems<I> {
    * to include additional holes.
    */
   get length(): number {
-    if (this._normalItem !== null)
-      return this.itemer().length(this._normalItem);
-
-    const pairs = nonNull(this._pairs);
-    if (pairs.length === 0) return 0;
-    else {
-      const lastPair = pairs[pairs.length - 1];
-      return lastPair.index + this.itemer().length(lastPair.item);
+    let ans = 0;
+    for (let current = this.next; current !== null; current = current.next) {
+      ans += this.nodeLength(current);
     }
+    return ans;
   }
 
   /**
    * Returns the number of present values in the array.
    */
   count(): number {
-    if (this._normalItem !== null) {
-      return this.itemer().length(this._normalItem);
-    }
-
     let count = 0;
-    for (const pair of nonNull(this._pairs)) {
-      count += this.itemer().length(pair.item);
-    }
-    return count;
-  }
-
-  /**
-   * Returns the number of present values within the slice [startIndex, endIndex).
-   *
-   * @throws If `startIndex < 0` or `endIndex < startIndex`. (It is okay for
-   * either index to exceed `this.length`.)
-   */
-  countBetween(startIndex: number, endIndex: number): number {
-    if (
-      !Number.isSafeInteger(startIndex) ||
-      !Number.isSafeInteger(endIndex) ||
-      startIndex < 0 ||
-      endIndex < startIndex
-    ) {
-      throw new Error(
-        `Invalid slice: startIndex=${startIndex}, endIndex=${endIndex}`
-      );
-    }
-
-    if (this._normalItem !== null) {
-      const normalItemLength = this.itemer().length(this._normalItem);
-      return (
-        Math.min(endIndex, normalItemLength) -
-        Math.min(startIndex, normalItemLength)
-      );
-    }
-
-    let count = 0;
-    for (const pair of nonNull(this._pairs)) {
-      if (pair.index >= endIndex) break;
-      const pairEndIndex = pair.index + this.itemer().length(pair.item);
-      if (pairEndIndex >= startIndex) {
-        count +=
-          Math.min(endIndex, pairEndIndex) - Math.max(startIndex, pair.index);
+    for (let current = this.next; current !== null; current = current.next) {
+      if (!(current instanceof DeletedNode)) {
+        count += this.itemer().length(current.item);
       }
     }
     return count;
@@ -287,11 +218,7 @@ export abstract class SparseItems<I> {
    * Note that an array may be empty but have nonzero length.
    */
   isEmpty(): boolean {
-    if (this._normalItem !== null) {
-      return this.itemer().length(this._normalItem) === 0;
-    }
-
-    return nonNull(this._pairs).length === 0;
+    return this.next === null;
   }
 
   /**
@@ -304,18 +231,14 @@ export abstract class SparseItems<I> {
   _get(index: number): [item: I, offset: number] | null {
     checkIndex(index);
 
-    if (this._normalItem !== null) {
-      if (index < this.itemer().length(this._normalItem)) {
-        return [this._normalItem, index];
-      } else return null;
-    }
-
-    // OPT: binary search in long lists?
-    for (const pair of nonNull(this._pairs)) {
-      if (index < pair.index) break;
-      if (index < pair.index + this.itemer().length(pair.item)) {
-        return [pair.item, index - pair.index];
+    let remaining = index;
+    for (let current = this.next; current !== null; current = current.next) {
+      const length = this.nodeLength(current);
+      if (length < remaining) {
+        if (current instanceof DeletedNode) return null;
+        else return [current.item, remaining];
       }
+      remaining -= length;
     }
     return null;
   }
@@ -327,58 +250,6 @@ export abstract class SparseItems<I> {
    */
   has(index: number): boolean {
     return this._get(index) !== null;
-  }
-
-  /**
-   * @ignore Internal optimized combination of `get` and `indexOfCount`.
-   *
-   * Returns the value at the given count and its index,
-   * in the form [item, offset within item, index].
-   *
-   * That is, we advance through the array
-   * until reaching the `count`-th present value, returning its value and index.
-   * If the array ends before finding such a value, returns null.
-   *
-   * @param startIndex Index to start searching. If specified, only indices >= startIndex
-   * contribute towards `count`.
-   *
-   * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
-   */
-  _getAtCount(
-    count: number,
-    startIndex = 0
-  ): [item: I, offset: number, index: number] | null {
-    checkIndex(count, "count");
-    checkIndex(startIndex, "startIndex");
-
-    if (this._normalItem !== null) {
-      const index = startIndex + count;
-      return index < this.itemer().length(this._normalItem)
-        ? [this._normalItem, index, index]
-        : null;
-    }
-
-    const pairs = nonNull(this._pairs);
-
-    let countRemaining = count;
-    let i = 0;
-    for (; i < pairs.length; i++) {
-      if (pairs[i].index + this.itemer().length(pairs[i].item) >= startIndex) {
-        // Adjust countRemaining as if startIndex was this.pairs[i].index.
-        countRemaining += Math.max(0, startIndex - pairs[i].index);
-        break;
-      }
-    }
-
-    // We pretend that startIndex = this.pairs[i].index.
-    for (; i < pairs.length; i++) {
-      const itemLength = this.itemer().length(pairs[i].item);
-      if (countRemaining < itemLength) {
-        return [pairs[i].item, countRemaining, pairs[i].index + countRemaining];
-      }
-      countRemaining -= itemLength;
-    }
-    return null;
   }
 
   /**
@@ -498,108 +369,8 @@ export abstract class SparseItems<I> {
    * @throws If `index < 0` or `count < 0`. (It is okay if the range extends beyond `this.length`.)
    */
   delete(index: number, count = 1): this {
-    checkIndex(index);
     checkIndex(count, "count");
-
-    // Avoid trivial-item edge case.
-    if (count === 0) return this.construct([]);
-
-    if (this._normalItem !== null) {
-      const normalLen = this.itemer().length(this._normalItem);
-      // To remain normal, the deletion must not delete a head-only section.
-      if (index + count >= normalLen) {
-        let replaced: this;
-        if (index < normalLen) {
-          replaced = this.construct([
-            { index: 0, item: this.itemer().slice(this._normalItem, index) },
-          ]);
-        } else replaced = this.construct([]);
-        if (index < normalLen) {
-          this._normalItem = this.itemer().shorten(this._normalItem, index);
-        }
-        return replaced;
-      }
-      // Else fall through. Will transition from _normalItems to _pairs.
-    }
-
-    const pairs = this.forcePairs();
-
-    const replacedPairs: Pair<I>[] = [];
-
-    const [sI, sOffset] = locateForMutation(pairs, index, true);
-    if (sI !== -1) {
-      const start = pairs[sI];
-      const sLength = this.itemer().length(start.item);
-      if (sOffset < sLength) {
-        // Part of start is deleted.
-        // Since sOffset > 0, not all of it is deleted.
-        if (sOffset + count <= sLength) {
-          // A middle section of start is deleted, and the deletions end within start.
-          // Shorten the existing segment and (if needed) add a new one for the tail.
-          const sMid = this.itemer().slice(
-            start.item,
-            sOffset,
-            sOffset + count
-          );
-          if (sOffset + count < sLength) {
-            const sTail = this.itemer().slice(start.item, sOffset + count);
-            pairs.splice(sI + 1, 0, {
-              index: start.index + sOffset + count,
-              item: sTail,
-            });
-          }
-          start.item = this.itemer().shorten(start.item, sOffset);
-
-          return this.construct([{ index: 0, item: sMid }]);
-        } else {
-          // The tail of start is deleted, and later segments may also be affected.
-          replacedPairs.push({
-            index: 0,
-            item: this.itemer().slice(start.item, sOffset),
-          });
-          // Shorten the existing segment.
-          start.item = this.itemer().shorten(start.item, sOffset);
-          // Continue since later segments may be affected.
-        }
-      }
-      // Else start is unaffected.
-      // In any case, once we get here, this.segments[sI] is fixed up,
-      // so we don't need to splice it out later - splicing starts at
-      // sI + 1 (which also works when sI = -1).
-    }
-
-    // At the end of this loop, i will be the first index that does *not* need
-    // to be spliced out (it's either after the deleted region
-    // or fixed in-place by the loop).
-    let i = sI + 1;
-    for (; i < pairs.length; i++) {
-      const segIndex = pairs[i].index;
-      if (index + count <= segIndex) break;
-      const segment = pairs[i].item;
-      const segLength = this.itemer().length(segment);
-      if (index + count < segIndex + segLength) {
-        // The head of segment is deleted, but not all of it.
-        replacedPairs.push({
-          index: segIndex - index,
-          item: this.itemer().slice(segment, 0, index + count - segIndex),
-        });
-        // Fix segment in-place.
-        pairs[i].index = index + count;
-        pairs[i].item = this.itemer().slice(segment, index + count - segIndex);
-        break;
-      } else {
-        // All of segment is deleted.
-        // Aliasing segment is okay here because we'll splice out our own
-        // pointer to it later.
-        replacedPairs.push({ index: segIndex - index, item: segment });
-      }
-    }
-
-    // Delete [sI + 1, i).
-    if (i != sI + 1) {
-      pairs.splice(sI + 1, i - (sI + 1));
-    }
-    return this.construct(replacedPairs);
+    return this.overwrite(index, new DeletedNode(count));
   }
 
   /**
@@ -616,139 +387,123 @@ export abstract class SparseItems<I> {
    * @throws If `index < 0`. (It is okay if the range extends beyond `this.length`.)
    */
   _set(index: number, item: I): this {
+    return this.overwrite(index, new PresentNode(item));
+  }
+
+  // TODO: careful about aliasing
+  // TODO: check for no-deleted-ends in tests
+  private overwrite(index: number, node: Node<I>): this {
     checkIndex(index);
 
-    const count = this.itemer().length(item);
+    const nodeLength = this.nodeLength(node);
+    if (nodeLength === 0) return this.construct();
 
-    // Avoid trivial-item edge case.
-    if (count === 0) return this.construct([]);
+    if (this.next === null) {
+      this.next = new DeletedNode(index + nodeLength);
+    }
+    // Cast needed due to https://github.com/microsoft/TypeScript/issues/9974
+    const left = (index === 0 ? this : this.createSplit(this.next, index)) as {
+      next: Node<I> | null;
+    };
 
-    if (this._normalItem !== null) {
-      const normalLen = this.itemer().length(this._normalItem);
-      // To remain normal, the set section must be after a gap.
-      if (index <= normalLen) {
-        let replaced: this;
-        if (index < normalLen) {
-          replaced = this.construct([
-            {
-              index: 0,
-              item: this.itemer().slice(this._normalItem, index, index + count),
-            },
-          ]);
-        } else replaced = this.construct([]);
-        this._normalItem = this.itemer().update(this._normalItem, index, item);
-        return replaced;
-      }
-      // Else fall through. Will transition from _normalItems to _pairs.
+    if (left.next === null) {
+      left.next = new DeletedNode(nodeLength);
+    }
+    const preRight = this.createSplit(left.next, nodeLength);
+
+    const replacedStart = left.next;
+    left.next = node;
+    node.next = preRight.next;
+    preRight.next = null;
+
+    // If the new node is last and it's deleted, trim it.
+    if (node.next === null && node instanceof DeletedNode) {
+      left.next = null;
     }
 
-    const pairs = this.forcePairs();
+    const replaced = this.construct();
+    replaced.next = replacedStart;
+    return replaced;
+  }
 
-    // Optimize common case: append.
-    if (pairs.length === 0) {
-      pairs.push({ index, item });
-      return this.construct([]);
-    } else {
-      const lastPair = pairs[pairs.length - 1];
-      const lastLength = this.itemer().length(lastPair.item);
-      if (lastPair.index + lastLength == index) {
-        lastPair.item = this.itemer().merge(lastPair.item, item);
-        return this.construct([]);
-      } else if (lastPair.index + lastLength < index) {
-        pairs.push({ index, item });
-        return this.construct([]);
+  /**
+   * Creates a split (node boundary) at delta in the given list, returning
+   * the PreNode<I> TODO before the split. If needed, the list is extended to length
+   * delta using a DeletedNode<I>.
+   *
+   * @param index Must be > 0.
+   * @returns The node just before the split.
+   */
+  private createSplit(start: Node<I>, delta: number): Node<I> {
+    // eslint-disable-next-line prefer-const
+    let [left, leftOffset, leftOutside] = this.locate(start, delta);
+    if (leftOutside) {
+      const preLeft = left;
+      const preLeftLength = this.nodeLength(preLeft);
+      left = new DeletedNode<I>(leftOffset - preLeftLength);
+      leftOffset -= preLeftLength;
+      this.append(preLeft, left);
+    } else this.split(left, leftOffset);
+    return left;
+  }
+
+  /**
+   * Given delta > 0, returns the node containing that index and the offset within it.
+   * The returned offset satisfies 0 < offset <= node.length, unless delta is outside
+   * the list, in which case offset is greater and outside is true.
+   */
+  private locate(
+    start: Node<I>,
+    delta: number
+  ): [node: Node<I>, offset: number, outside: boolean] {
+    let current = start;
+    let remaining = delta;
+    for (; current.next !== null; current = current.next) {
+      const currentLength = this.nodeLength(current);
+      if (remaining <= currentLength) {
+        return [current, remaining, false];
+      }
+      remaining -= currentLength;
+    }
+    return [current, remaining, remaining > this.nodeLength(current)];
+  }
+
+  /**
+   * Connects before to after in the list, merging if possible.
+   * Returns the final node, whose next pointer is *not* updated.
+   */
+  private append(before: Node<I>, after: Node<I>): void {
+    if (before instanceof PresentNode && after instanceof PresentNode) {
+      const [success, merged] = this.itemer().tryMerge(before.item, after.item);
+      if (success) {
+        before.item = merged;
+        return;
       }
     }
+    // Can't merge.
+    before.next = after;
+  }
 
-    const replacedPairs: Pair<I>[] = [];
-
-    const [sI, sOffset] = locateForMutation(pairs, index, false);
-    let itemAdded = false;
-    if (sI !== -1) {
-      const start = pairs[sI].item;
-      const sLength = this.itemer().length(start);
-      if (sOffset <= sLength) {
-        // Part of start is overwritten, and/or start is appended to.
-        // Note: possibly sOffset = 0.
-        if (sOffset + count <= sLength) {
-          // item is contained within start.
-          const sMid = this.itemer().slice(start, sOffset, sOffset + count);
-          // Modify the existing segment in-place.
-          pairs[sI].item = this.itemer().update(start, sOffset, item);
-          return this.construct([{ index: 0, item: sMid }]);
-        } else {
-          if (sOffset < sLength) {
-            // The tail of start is overwritten.
-            replacedPairs.push({
-              index: 0,
-              item: this.itemer().slice(start, sOffset),
-            });
-          }
-          // Overwrite & append to the existing segment.
-          pairs[sI].item = this.itemer().update(start, sOffset, item);
-          // Continue since other segments may be affected.
-        }
-        itemAdded = true;
-      }
-      // Else start is unaffected.
-      // In any case, once we get here, this.segments[sI] is fixed up,
-      // so we don't need to splice it out later - splicing starts at
-      // sI + 1 (which also works when sI = -1).
-    }
-
-    // At the end of this loop, i will be the first index that does *not* need
-    // to be spliced out (it's after the affected region).
-    let i = sI + 1;
-    for (; i < pairs.length; i++) {
-      const segIndex = pairs[i].index;
-      if (index + count < segIndex) break;
-      const segment = pairs[i].item;
-      const segLength = this.itemer().length(segment);
-      if (index + count < segIndex + segLength) {
-        // The head of segment is overwritten, but not all of it.
-        // The rest needs to be appended to item's segment.
-        let tail: I;
-        if (index + count > segIndex) {
-          replacedPairs.push({
-            index: segIndex - index,
-            item: this.itemer().slice(segment, 0, index + count - segIndex),
-          });
-          tail = this.itemer().slice(segment, index + count - segIndex);
-        } else {
-          // Nothing actually overwritten (head is trivial);
-          // we're just appending segment to item.
-          tail = segment;
-        }
-
-        if (itemAdded) {
-          // Append non-overwritten tail to start.
-          pairs[sI].item = this.itemer().merge(pairs[sI].item, tail);
-        } else {
-          // Append non-overwritten tail to item, which is added later.
-          item = this.itemer().merge(item, tail);
-        }
-
-        // segment still needs to spliced out.
-        i++;
-        break;
+  /**
+   * Splits the node at the given offset (if needed).
+   *
+   * @param offset 0 < offset <= node.length
+   */
+  private split(node: Node<I>, offset: number) {
+    if (offset !== this.nodeLength(node)) {
+      let after: Node<I>;
+      if (node instanceof PresentNode) {
+        const [first, second] = this.itemer().split(node.item, offset);
+        node.item = first;
+        after = new PresentNode(second);
       } else {
-        // All of segment is overwritten.
-        // Aliasing segment is okay here because we'll splice out our own
-        // pointer to it later.
-        replacedPairs.push({ index: segIndex - index, item: segment });
+        const [first, second] = [offset, node.length - offset];
+        node.length = first;
+        after = new DeletedNode<I>(second);
       }
+      after.next = node.next;
+      node.next = after;
     }
-
-    // Delete [sI + 1, i).
-    if (itemAdded) {
-      if (i != sI + 1) {
-        pairs.splice(sI + 1, i - (sI + 1));
-      }
-    } else {
-      // Still need to add item, as a new segment.
-      pairs.splice(sI + 1, i - (sI + 1), { item, index });
-    }
-    return this.construct(replacedPairs);
   }
 }
 
@@ -866,33 +621,4 @@ class PairSlicer<I> implements ItemSlicer<I> {
     }
     return ret;
   }
-}
-
-/**
- *
- * Locates the given index within pairs.
- *
- * index corresponds to pairs[i].item at the given offset, which may be
- * beyond the end of the item. Except, if index precedes all present
- * values, returns [-1, index].
- *
- * @param includeEnds If index lands at the start of an item, whether
- * to instead reference the (deleted) far end of the previous item.
- * So offset will not be zero unless this returns [-1, 0].
- */
-function locateForMutation<I>(
-  pairs: Pair<I>[],
-  index: number,
-  includeEnds: boolean
-): [i: number, offset: number] {
-  // Since we expect mutations to be clustered towards the end, optimize
-  // for that case by searching backwards.
-  // OPT: binary search in long lists?
-  for (let i = pairs.length - 1; i >= 0; i--) {
-    const itemIndex = pairs[i].index;
-    if (itemIndex < index || (!includeEnds && itemIndex === index)) {
-      return [i, index - itemIndex];
-    }
-  }
-  return [-1, index];
 }
