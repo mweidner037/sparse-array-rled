@@ -1,63 +1,14 @@
-import { checkIndex, nonNull } from "./util";
+import { checkIndex } from "./util";
 
-// TODO: cleanup methods (including in impls)
-/**
- * Item-type-specific functions used by SparseItems.
- */
-export interface Itemer<I> {
-  /**
-   * Return whether it could actually be an item. Called on user-provided
-   * serialized states, which could be corrupt.
-   */
-  isValid(allegedItem: unknown): boolean;
-
-  /**
-   * Returns the length of item.
-   */
-  length(item: I): number;
-
-  /**
-   * Returns the merge (concatenation) of a and b.
-   *
-   * May modify a in-place and return it.
-   */
-  tryMerge(a: I, b: I): [success: boolean, merged: I];
-
-  /**
-   * Given 0 < index < item.length, returns items split from it at index.
-   *
-   * May modify item in-place and return it as left.
-   */
-  split(item: I, index: number): [left: I, right: I];
-
-  /**
-   * Returns a new (non-aliased) item representing the given slice.
-   *
-   * Note: start and end may be >= length; these cases are
-   * handled as in Array.slice.
-   */
-  slice(item: I, start?: number, end?: number): I;
-
-  /**
-   * Returns item with values replaced starting at start.
-   * Note: the replacing values may extend beyond the current end of item.
-   *
-   * May modify item in-place and return it.
-   */
-  update(item: I, start: number, replace: I): I;
-
-  /**
-   * Returns item shortened to the given length, which is guaranteed to
-   * be <= item.length.
-   *
-   * May modify item in-place and return it.
-   */
-  shorten(item: I, newLength: number): I;
-}
+// TODO: opt for simple overwrite (like prev Itemer.update method)? Check benchmarks.
 
 export abstract class PresentNode<I> {
   next: Node<I> | null = null;
   abstract item: I;
+  /**
+   * For memory efficiency & mutations, this should be a getter using item,
+   * instead of a stored property.
+   */
   abstract readonly length: number;
 
   /**
@@ -72,6 +23,10 @@ export abstract class PresentNode<I> {
    * @returns Whether merging succeeded.
    */
   abstract tryMergeContent(other: PresentNode<I>): boolean;
+  /**
+   * Return a shallow copy of this.item.
+   */
+  abstract cloneItem(): I;
 }
 
 class DeletedNode<I> {
@@ -130,31 +85,23 @@ export abstract class SparseItems<I> {
    * Constructs a SparseItems with the given state, performing no validation.
    *
    * Don't override this constructor.
+   *
+   * TODO: if always called with null, remove arg.
    */
-  protected constructor(pairs: Pair<I>[]) {
-    if (pairs.length === 0) {
-      this._normalItem = this.itemer().newEmpty();
-    } else if (pairs.length === 1 && pairs[0].index === 0) {
-      this._normalItem = pairs[0].item;
-    } else {
-      this._pairs = pairs;
-    }
+  protected constructor(start: Node<I> | null) {
+    this.next = start;
   }
 
   /**
    * We can't directly force subclasses to use the same constructor; instead, we use
    * this abstract method to construct instances of `this` as if we had called
    * our own constructor.
-   */
-  protected abstract construct(pairs: Pair<I>[]): this;
-
-  /**
-   * Returns an Itemer for working with our item type.
    *
-   * To avoid storing the Itemer once per object, this method should return a global
-   * constant.
+   * TODO: if always called with null, remove arg.
    */
-  protected abstract itemer(): Itemer<I>;
+  protected abstract construct(start: Node<I> | null): this;
+
+  protected abstract newNode(item: I): PresentNode<I>;
 
   /**
    * The greatest present index in the array plus 1, or 0 if there are no
@@ -181,7 +128,7 @@ export abstract class SparseItems<I> {
     let count = 0;
     for (let current = this.next; current !== null; current = current.next) {
       if (!(current instanceof DeletedNode)) {
-        count += this.itemer().length(current.item);
+        count += current.length;
       }
     }
     return count;
@@ -195,21 +142,18 @@ export abstract class SparseItems<I> {
   _countHas(index: number): [count: number, has: boolean] {
     checkIndex(index);
 
-    if (this._normalItem !== null) {
-      const normalItemLength = this.itemer().length(this._normalItem);
-      if (index < normalItemLength) return [index, true];
-      else return [normalItemLength, false];
-    }
-
     // count "of" index = # present values before index.
     let count = 0;
-    for (const pair of nonNull(this._pairs)) {
-      if (index < pair.index) break;
-      const itemLength = this.itemer().length(pair.item);
-      if (index < pair.index + itemLength) {
-        return [count + index - pair.index, true];
+    let remaining = index;
+    for (let current = this.next; current !== null; current = current.next) {
+      if (remaining < current.length) {
+        if (current instanceof PresentNode) {
+          count += remaining;
+          return [count, true];
+        } else return [count, false];
       }
-      count += itemLength;
+      if (current instanceof PresentNode) count += current.length;
+      remaining -= current.length;
     }
     return [count, false];
   }
@@ -250,12 +194,11 @@ export abstract class SparseItems<I> {
 
     let remaining = index;
     for (let current = this.next; current !== null; current = current.next) {
-      const length = current.length;
-      if (length < remaining) {
+      if (current.length < remaining) {
         if (current instanceof DeletedNode) return null;
         else return [current.item, remaining];
       }
-      remaining -= length;
+      remaining -= current.length;
     }
     return null;
   }
@@ -284,9 +227,32 @@ export abstract class SparseItems<I> {
    * @throws If `count < 0` or `startIndex < 0`. (It is okay for startIndex to exceed `this.length`.)
    */
   indexOfCount(count: number, startIndex = 0): number {
-    const located = this._getAtCount(count, startIndex);
-    if (located === null) return -1;
-    return located[2];
+    checkIndex(count, "count");
+    checkIndex(startIndex, "startIndex");
+
+    if (this.next === null) return -1;
+    const [node, offset, outside] = locate(this.next, startIndex);
+    if (outside) return -1;
+
+    // Step back to the start of node, so that we can ignore offset.
+    if (node instanceof PresentNode) count += offset;
+    let index = startIndex - offset;
+
+    let countRemaining = count;
+    for (
+      let current: Node<I> | null = this.next;
+      current !== null;
+      current = current.next
+    ) {
+      if (current instanceof PresentNode) {
+        if (countRemaining < current.length) {
+          return index + countRemaining;
+        }
+        countRemaining -= current.length;
+      }
+      index += current.length;
+    }
+    return -1;
   }
 
   /**
@@ -310,10 +276,14 @@ export abstract class SparseItems<I> {
    * Iterates over the present indices (keys), in order.
    */
   *keys(): IterableIterator<number> {
-    for (const pair of this.asPairs()) {
-      for (let j = 0; j < this.itemer().length(pair.item); j++) {
-        yield pair.index + j;
+    let index = 0;
+    for (let current = this.next; current !== null; current = current.next) {
+      if (current instanceof PresentNode) {
+        for (let j = 0; j < current.length; j++) {
+          yield index + j;
+        }
       }
+      index += current.length;
     }
   }
 
@@ -324,8 +294,12 @@ export abstract class SparseItems<I> {
    * ending at a deleted index.
    */
   *items(): IterableIterator<[index: number, values: I]> {
-    for (const pair of this.asPairs()) {
-      yield [pair.index, this.itemer().slice(pair.item)];
+    let index = 0;
+    for (let current = this.next; current !== null; current = current.next) {
+      if (current instanceof PresentNode) {
+        yield [index, current.cloneItem()];
+      }
+      index += current.length;
     }
   }
 
@@ -333,14 +307,30 @@ export abstract class SparseItems<I> {
    * Returns a shallow copy of this array.
    */
   clone(): this {
+    if (this.next === null) return this.construct(null);
+
     // Deep copy our state (but without cloning values within items - hence
     // it appears "shallow" to the caller).
-    return this.construct(
-      this.asPairs().map((pair) => ({
-        index: pair.index,
-        item: this.itemer().slice(pair.item),
-      }))
-    );
+    const startCloned = this.cloneNode(this.next);
+    let currentCloned = startCloned;
+    for (
+      let current = this.next;
+      current.next !== null;
+      current = current.next
+    ) {
+      const nextCloned = this.cloneNode(current.next);
+      currentCloned.next = nextCloned;
+      currentCloned = nextCloned;
+    }
+    return this.construct(startCloned);
+  }
+
+  /**
+   * Clones node's content while leaving next = null.
+   */
+  private cloneNode(node: Node<I>): Node<I> {
+    if (node instanceof PresentNode) return this.newNode(node.cloneItem());
+    else return new DeletedNode(node.length);
   }
 
   /**
@@ -404,7 +394,7 @@ export abstract class SparseItems<I> {
    * @throws If `index < 0`. (It is okay if the range extends beyond `this.length`.)
    */
   _set(index: number, item: I): this {
-    return this.overwrite(index, new PresentNode(item));
+    return this.overwrite(index, this.newNode(item));
   }
 
   // TODO: careful about aliasing
@@ -412,7 +402,7 @@ export abstract class SparseItems<I> {
   private overwrite(index: number, node: Node<I>): this {
     checkIndex(index);
 
-    if (node.length === 0) return this.construct();
+    if (node.length === 0) return this.construct(null);
 
     if (this.next === null) {
       this.next = new DeletedNode(index + node.length);
@@ -437,7 +427,7 @@ export abstract class SparseItems<I> {
       left.next = null;
     }
 
-    const replaced = this.construct();
+    const replaced = this.construct(null);
     replaced.next = replacedStart;
     return replaced;
   }
