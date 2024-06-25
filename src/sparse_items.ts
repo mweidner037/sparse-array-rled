@@ -55,14 +55,38 @@ export interface Itemer<I> {
   shorten(item: I, newLength: number): I;
 }
 
+export abstract class PresentNode<I> {
+  next: Node<I> | null = null;
+  abstract item: I;
+  abstract readonly length: number;
+
+  /**
+   * Set this one to the first half in-place; return a new second half. Don't update next pointers.
+   *
+   * @param index 0 < index < length
+   */
+  abstract splitContent(index: number): PresentNode<I>;
+  /**
+   * Merge other's content with ours (appending other).
+   *
+   * @returns Whether merging succeeded.
+   */
+  abstract tryMergeContent(other: PresentNode<I>): boolean;
+}
+
 class DeletedNode<I> {
   next: Node<I> | null = null;
   constructor(public length: number) {}
-}
-
-class PresentNode<I> {
-  next: Node<I> | null = null;
-  constructor(public item: I) {}
+  /**
+   * Set this one to the first half in-place; return a new second half. Don't update next pointers.
+   *
+   * @param index 0 < index < length
+   */
+  splitContent(index: number): DeletedNode<I> {
+    const after = new DeletedNode<I>(this.length - index);
+    this.length = index;
+    return after;
+  }
 }
 
 export type Node<I> = PresentNode<I> | DeletedNode<I>;
@@ -132,13 +156,6 @@ export abstract class SparseItems<I> {
    */
   protected abstract itemer(): Itemer<I>;
 
-  private nodeLength(node: Node<I>): number {
-    // TODO: way to optimize this?
-    return node instanceof DeletedNode
-      ? node.length
-      : this.itemer().length(node.item);
-  }
-
   /**
    * The greatest present index in the array plus 1, or 0 if there are no
    * present values.
@@ -152,7 +169,7 @@ export abstract class SparseItems<I> {
   get length(): number {
     let ans = 0;
     for (let current = this.next; current !== null; current = current.next) {
-      ans += this.nodeLength(current);
+      ans += current.length;
     }
     return ans;
   }
@@ -233,7 +250,7 @@ export abstract class SparseItems<I> {
 
     let remaining = index;
     for (let current = this.next; current !== null; current = current.next) {
-      const length = this.nodeLength(current);
+      const length = current.length;
       if (length < remaining) {
         if (current instanceof DeletedNode) return null;
         else return [current.item, remaining];
@@ -395,21 +412,20 @@ export abstract class SparseItems<I> {
   private overwrite(index: number, node: Node<I>): this {
     checkIndex(index);
 
-    const nodeLength = this.nodeLength(node);
-    if (nodeLength === 0) return this.construct();
+    if (node.length === 0) return this.construct();
 
     if (this.next === null) {
-      this.next = new DeletedNode(index + nodeLength);
+      this.next = new DeletedNode(index + node.length);
     }
     // Cast needed due to https://github.com/microsoft/TypeScript/issues/9974
-    const left = (index === 0 ? this : this.createSplit(this.next, index)) as {
+    const left = (index === 0 ? this : createSplit(this.next, index)) as {
       next: Node<I> | null;
     };
 
     if (left.next === null) {
-      left.next = new DeletedNode(nodeLength);
+      left.next = new DeletedNode(node.length);
     }
-    const preRight = this.createSplit(left.next, nodeLength);
+    const preRight = createSplit(left.next, node.length);
 
     const replacedStart = left.next;
     left.next = node;
@@ -425,85 +441,75 @@ export abstract class SparseItems<I> {
     replaced.next = replacedStart;
     return replaced;
   }
+}
 
-  /**
-   * Creates a split (node boundary) at delta in the given list, returning
-   * the PreNode<I> TODO before the split. If needed, the list is extended to length
-   * delta using a DeletedNode<I>.
-   *
-   * @param index Must be > 0.
-   * @returns The node just before the split.
-   */
-  private createSplit(start: Node<I>, delta: number): Node<I> {
-    // eslint-disable-next-line prefer-const
-    let [left, leftOffset, leftOutside] = this.locate(start, delta);
-    if (leftOutside) {
-      const preLeft = left;
-      const preLeftLength = this.nodeLength(preLeft);
-      left = new DeletedNode<I>(leftOffset - preLeftLength);
-      leftOffset -= preLeftLength;
-      this.append(preLeft, left);
-    } else this.split(left, leftOffset);
-    return left;
+/**
+ * Creates a split (node boundary) at delta in the given list, returning
+ * the node before the split. If needed, the list is extended to length
+ * delta using a DeletedNode<I>.
+ *
+ * @param index Must be > 0.
+ * @returns The node just before the split.
+ */
+function createSplit<I>(start: Node<I>, delta: number): Node<I> {
+  // eslint-disable-next-line prefer-const
+  let [left, leftOffset, leftOutside] = locate(start, delta);
+  if (leftOutside) {
+    const preLeft = left;
+    left = new DeletedNode<I>(leftOffset - preLeft.length);
+    leftOffset -= preLeft.length;
+    append(preLeft, left);
+  } else split(left, leftOffset);
+  return left;
+}
+
+/**
+ * Given delta > 0, returns the node containing that index and the offset within it.
+ * The returned offset satisfies 0 < offset <= node.length, unless delta is outside
+ * the list, in which case offset is greater and outside is true.
+ */
+function locate<I>(
+  start: Node<I>,
+  delta: number
+): [node: Node<I>, offset: number, outside: boolean] {
+  let current = start;
+  let remaining = delta;
+  for (; current.next !== null; current = current.next) {
+    if (remaining <= current.length) {
+      return [current, remaining, false];
+    }
+    remaining -= current.length;
+  }
+  return [current, remaining, remaining > current.length];
+}
+
+/**
+ * Connects before to after in the list, merging if possible.
+ * Returns the final node, whose next pointer is *not* updated.
+ */
+function append<I>(before: Node<I>, after: Node<I>): void {
+  if (before instanceof PresentNode && after instanceof PresentNode) {
+    const success = before.tryMergeContent(after);
+    if (success) return;
+  } else if (before instanceof DeletedNode && after instanceof DeletedNode) {
+    before.length += after.length;
+    return;
   }
 
-  /**
-   * Given delta > 0, returns the node containing that index and the offset within it.
-   * The returned offset satisfies 0 < offset <= node.length, unless delta is outside
-   * the list, in which case offset is greater and outside is true.
-   */
-  private locate(
-    start: Node<I>,
-    delta: number
-  ): [node: Node<I>, offset: number, outside: boolean] {
-    let current = start;
-    let remaining = delta;
-    for (; current.next !== null; current = current.next) {
-      const currentLength = this.nodeLength(current);
-      if (remaining <= currentLength) {
-        return [current, remaining, false];
-      }
-      remaining -= currentLength;
-    }
-    return [current, remaining, remaining > this.nodeLength(current)];
-  }
+  // Can't merge.
+  before.next = after;
+}
 
-  /**
-   * Connects before to after in the list, merging if possible.
-   * Returns the final node, whose next pointer is *not* updated.
-   */
-  private append(before: Node<I>, after: Node<I>): void {
-    if (before instanceof PresentNode && after instanceof PresentNode) {
-      const [success, merged] = this.itemer().tryMerge(before.item, after.item);
-      if (success) {
-        before.item = merged;
-        return;
-      }
-    }
-    // Can't merge.
-    before.next = after;
-  }
-
-  /**
-   * Splits the node at the given offset (if needed).
-   *
-   * @param offset 0 < offset <= node.length
-   */
-  private split(node: Node<I>, offset: number) {
-    if (offset !== this.nodeLength(node)) {
-      let after: Node<I>;
-      if (node instanceof PresentNode) {
-        const [first, second] = this.itemer().split(node.item, offset);
-        node.item = first;
-        after = new PresentNode(second);
-      } else {
-        const [first, second] = [offset, node.length - offset];
-        node.length = first;
-        after = new DeletedNode<I>(second);
-      }
-      after.next = node.next;
-      node.next = after;
-    }
+/**
+ * Splits the node at the given offset (if needed).
+ *
+ * @param offset 0 < offset <= node.length
+ */
+function split<I>(node: Node<I>, offset: number): void {
+  if (offset !== node.length) {
+    const after = node.splitContent(offset);
+    after.next = node.next;
+    node.next = after;
   }
 }
 
