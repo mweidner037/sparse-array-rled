@@ -6,8 +6,6 @@ import {
 } from "./sparse_items";
 import { checkIndex } from "./util";
 
-// TODO: add embeds
-
 /**
  * Serialized form of a SparseString.
  *
@@ -21,14 +19,18 @@ import { checkIndex } from "./util";
  * except that the 0th entry may be an empty string.
  * For example, the sparse string `[, , "x", "y"]` serializes to `["", 2, "xy"]`.
  */
-export type SerializedSparseString = (string | number)[];
+export type SerializedSparseString<E extends object | never = never> = (
+  | string
+  | E
+  | number
+)[];
 
 /**
  * Iterator-like object returned by SparseText.newSlicer().
  *
  * Call nextSlice repeatedly to enumerate the slices in order.
  */
-export interface StringSlicer {
+export interface StringSlicer<E extends object | never = never> {
   /**
    * Returns an array of items in the next slice,
    * continuing from the previous index (inclusive) to endIndex (exclusive).
@@ -42,7 +44,7 @@ export interface StringSlicer {
    *
    * @throws If endIndex is less than the previous index.
    */
-  nextSlice(endIndex: number | null): Array<[index: number, chars: string]>;
+  nextSlice(endIndex: number | null): Array<[index: number, chars: string | E]>;
 }
 
 /**
@@ -56,13 +58,17 @@ export interface StringSlicer {
  *
  * @see SparseIndices To track a sparse array's present indices independent of its values.
  */
-export class SparseString extends SparseItems<string> {
+// TODO: default to never, once we check all usages.
+// TODO: test that never does what you expect for consumers.
+export class SparseString<E extends object | never = never> extends SparseItems<
+  string | E
+> {
   // So list-positions can refer to unbound versions, we avoid using
   // "this" in static methods.
   /**
    * Returns a new, empty SparseString.
    */
-  static new(): SparseString {
+  static new<E extends object | never = never>(): SparseString<E> {
     return new SparseString(null);
   }
 
@@ -72,13 +78,18 @@ export class SparseString extends SparseItems<string> {
    *
    * @throws If the serialized form is invalid (see `SparseString.serialize`).
    */
-  static deserialize(serialized: SerializedSparseString): SparseString {
-    return new SparseString(
-      deserializeItems(serialized, (allegedItem) => {
-        if (!(typeof allegedItem === "string")) {
+  static deserialize<E extends object | never = never>(
+    serialized: SerializedSparseString
+  ): SparseString<E> {
+    return new SparseString<E>(
+      deserializeItems<string | E>(serialized, (allegedItem) => {
+        if (typeof allegedItem === "string") {
+          return new StringNode(allegedItem);
+        } else if (typeof allegedItem === "object") {
+          return new EmbedNode(allegedItem as E);
+        } else {
           throw new Error(`Invalid item in serialized state: ${allegedItem}`);
         }
-        return new StringNode(allegedItem);
       })
     );
   }
@@ -90,9 +101,9 @@ export class SparseString extends SparseItems<string> {
    *
    * @see SparseString.entries
    */
-  static fromEntries(
-    entries: Iterable<[index: number, char: string]>
-  ): SparseString {
+  static fromEntries<E extends object | never = never>(
+    entries: Iterable<[index: number, char: string | E]>
+  ): SparseString<E> {
     const pairs: Pair<string>[] = [];
     let curLength = 0;
 
@@ -122,7 +133,7 @@ export class SparseString extends SparseItems<string> {
    *
    * See SerializedSparseString for a description of the format.
    */
-  serialize(): SerializedSparseString {
+  serialize(): SerializedSparseString<E> {
     return super.serialize();
   }
 
@@ -131,11 +142,12 @@ export class SparseString extends SparseItems<string> {
    *
    * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
-  get(index: number): string | undefined {
+  get(index: number): string | E | undefined {
     const located = this._get(index);
     if (located === null) return undefined;
     const [item, offset] = located;
-    return item[offset];
+    if (typeof item === "string") return item[offset];
+    else return item;
   }
 
   newSlicer(): StringSlicer {
@@ -147,11 +159,13 @@ export class SparseString extends SparseItems<string> {
    *
    * @see SparseText.fromEntries
    */
-  *entries(): IterableIterator<[index: number, char: string]> {
+  *entries(): IterableIterator<[index: number, char: string | E]> {
     for (const [index, item] of this.items()) {
-      for (let j = 0; j < item.length; j++) {
-        yield [index + j, item[j]];
-      }
+      if (typeof item === "string") {
+        for (let j = 0; j < item.length; j++) {
+          yield [index + j, item[j]];
+        }
+      } else yield [index, item];
     }
   }
 
@@ -164,16 +178,19 @@ export class SparseString extends SparseItems<string> {
    * @returns A sparse string of the previous values.
    * Index 0 in the returned string corresponds to `index` in this string.
    */
-  set(index: number, chars: string): SparseString {
-    return this._set(index, chars);
+  set(index: number, chars: string): SparseString<E>;
+  set(index: number, value: E): SparseString<E>;
+  set(index: number, values: string | E) {
+    return this._set(index, values);
   }
 
   protected construct(start: Node<string> | null): this {
     return new SparseString(start) as this;
   }
 
-  protected newNode(item: string): PresentNode<string> {
-    return new StringNode(item);
+  protected newNode(item: string | E): PresentNode<string | E> {
+    if (typeof item === "string") return new StringNode(item);
+    else return new EmbedNode(item);
   }
 }
 
@@ -193,11 +210,37 @@ class StringNode extends PresentNode<string> {
   }
 
   tryMergeContent(other: PresentNode<string>): boolean {
-    this.item += (other as StringNode).item;
-    return true;
+    if (other instanceof StringNode) {
+      this.item += other.item;
+      return true;
+    }
+    return false;
   }
 
   cloneItem(): string {
+    return this.item;
+  }
+}
+
+class EmbedNode<E extends object | never> extends PresentNode<E> {
+  constructor(public item: E) {
+    super();
+  }
+
+  get length(): number {
+    return 1;
+  }
+
+  splitContent(): PresentNode<E> {
+    throw new Error("Internal error");
+  }
+
+  tryMergeContent(): boolean {
+    return false;
+  }
+
+  cloneItem(): E {
+    // We don't deep-clone values, only their wrapper items.
     return this.item;
   }
 }
