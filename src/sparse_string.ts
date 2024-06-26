@@ -1,5 +1,12 @@
-import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
+import {
+  PresentNode,
+  Node,
+  SparseItems,
+  deserializeItems,
+} from "./sparse_items";
 import { checkIndex } from "./util";
+
+// TODO: add embeds
 
 /**
  * Serialized form of a SparseString.
@@ -56,7 +63,7 @@ export class SparseString extends SparseItems<string> {
    * Returns a new, empty SparseString.
    */
   static new(): SparseString {
-    return new SparseString([]);
+    return new SparseString(null);
   }
 
   /**
@@ -66,7 +73,14 @@ export class SparseString extends SparseItems<string> {
    * @throws If the serialized form is invalid (see `SparseString.serialize`).
    */
   static deserialize(serialized: SerializedSparseString): SparseString {
-    return new SparseString(deserializeItems(serialized, stringItemer));
+    return new SparseString(
+      deserializeItems(serialized, (allegedItem) => {
+        if (!(typeof allegedItem === "string")) {
+          throw new Error(`Invalid item in serialized state: ${allegedItem}`);
+        }
+        return new StringNode(allegedItem);
+      })
+    );
   }
 
   /**
@@ -134,9 +148,9 @@ export class SparseString extends SparseItems<string> {
    * @see SparseText.fromEntries
    */
   *entries(): IterableIterator<[index: number, char: string]> {
-    for (const pair of this.asPairs()) {
-      for (let j = 0; j < pair.item.length; j++) {
-        yield [pair.index + j, pair.item[j]];
+    for (const [index, item] of this.items()) {
+      for (let j = 0; j < item.length; j++) {
+        yield [index + j, item[j]];
       }
     }
   }
@@ -154,41 +168,36 @@ export class SparseString extends SparseItems<string> {
     return this._set(index, chars);
   }
 
-  protected construct(pairs: Pair<string>[]): this {
-    return new SparseString(pairs) as this;
+  protected construct(start: Node<string> | null): this {
+    return new SparseString(start) as this;
   }
 
-  protected itemer() {
-    return stringItemer;
+  protected newNode(item: string): PresentNode<string> {
+    return new StringNode(item);
   }
 }
 
-const stringItemer: Itemer<string> = {
-  isValid(allegedItem: unknown): boolean {
-    return typeof allegedItem === "string";
-  },
+class StringNode extends PresentNode<string> {
+  constructor(public item: string) {
+    super();
+  }
 
-  newEmpty(): string {
-    return "";
-  },
+  get length(): number {
+    return this.item.length;
+  }
 
-  length(item: string): number {
-    return item.length;
-  },
+  splitContent(index: number): PresentNode<string> {
+    const after = new StringNode(this.item.slice(index));
+    this.item = this.item.slice(0, index);
+    return after;
+  }
 
-  merge(a: string, b: string): string {
-    return a + b;
-  },
+  tryMergeContent(other: PresentNode<string>): boolean {
+    this.item += (other as StringNode).item;
+    return true;
+  }
 
-  slice(item: string, start?: number, end?: number): string {
-    return item.slice(start, end);
-  },
-
-  update(item: string, start: number, replace: string): string {
-    return item.slice(0, start) + replace + item.slice(start + replace.length);
-  },
-
-  shorten(item: string, newLength: number): string {
-    return item.slice(0, newLength);
-  },
-} as const;
+  cloneItem(): string {
+    return this.item;
+  }
+}

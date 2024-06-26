@@ -1,6 +1,9 @@
 import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
 import { checkIndex } from "./util";
 
+// TODO: needs to use different serialize/deserialize.
+// TODO: update serialized form descriptions on other classes (no longer alternating or strict start).
+
 /**
  * Serialized form of a SparseIndices.
  *

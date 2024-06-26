@@ -1,4 +1,9 @@
-import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
+import {
+  Node,
+  PresentNode,
+  SparseItems,
+  deserializeItems,
+} from "./sparse_items";
 import { checkIndex } from "./util";
 
 /**
@@ -66,7 +71,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * Returns a new, empty SparseArray.
    */
   static new<T>(): SparseArray<T> {
-    return new SparseArray([]);
+    return new SparseArray(null);
   }
 
   // OPT: unsafe version that skips internal T[] clones?
@@ -79,7 +84,12 @@ export class SparseArray<T> extends SparseItems<T[]> {
    */
   static deserialize<T>(serialized: SerializedSparseArray<T>): SparseArray<T> {
     return new SparseArray(
-      deserializeItems(serialized, arrayItemer as Itemer<T[]>)
+      deserializeItems(serialized, (allegedItem) => {
+        if (!Array.isArray(allegedItem)) {
+          throw new Error(`Invalid item in serialized state: ${allegedItem}`);
+        }
+        return new ArrayNode<T>(allegedItem as T[]);
+      })
     );
   }
 
@@ -148,9 +158,9 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * @see SparseArray.fromEntries
    */
   *entries(): IterableIterator<[index: number, value: T]> {
-    for (const pair of this.asPairs()) {
-      for (let j = 0; j < pair.item.length; j++) {
-        yield [pair.index + j, pair.item[j]];
+    for (const [index, item] of this.items()) {
+      for (let j = 0; j < item.length; j++) {
+        yield [index + j, item[j]];
       }
     }
   }
@@ -168,47 +178,36 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return this._set(index, values);
   }
 
-  protected construct(pairs: Pair<T[]>[]): this {
-    return new SparseArray(pairs) as this;
+  protected construct(start: Node<T[]> | null): this {
+    return new SparseArray(start) as this;
   }
 
-  protected itemer() {
-    return arrayItemer as Itemer<T[]>;
+  protected newNode(item: T[]): PresentNode<T[]> {
+    return new ArrayNode(item);
   }
 }
 
-const arrayItemer: Itemer<unknown[]> = {
-  isValid(allegedItem: unknown): boolean {
-    return Array.isArray(allegedItem);
-  },
+class ArrayNode<T> extends PresentNode<T[]> {
+  constructor(public item: T[]) {
+    super();
+  }
 
-  newEmpty(): unknown[] {
-    return [];
-  },
+  get length(): number {
+    return this.item.length;
+  }
 
-  length(item: unknown[]): number {
-    return item.length;
-  },
+  splitContent(index: number): PresentNode<T[]> {
+    const after = new ArrayNode(this.item.slice(index));
+    this.item.length = index;
+    return after;
+  }
 
-  merge(a: unknown[], b: unknown[]): unknown[] {
-    a.push(...b);
-    return a;
-  },
+  tryMergeContent(other: PresentNode<T[]>): boolean {
+    this.item.push(...(other as ArrayNode<T>).item);
+    return true;
+  }
 
-  slice(item: unknown[], start?: number, end?: number | undefined): unknown[] {
-    return item.slice(start, end);
-  },
-
-  update(item: unknown[], start: number, replace: unknown[]): unknown[] {
-    if (start === item.length) item.push(...replace);
-    else {
-      for (let i = 0; i < replace.length; i++) item[start + i] = replace[i];
-    }
-    return item;
-  },
-
-  shorten(item: unknown[], newLength: number): unknown[] {
-    item.length = newLength;
-    return item;
-  },
-} as const;
+  cloneItem(): T[] {
+    return this.item.slice();
+  }
+}
