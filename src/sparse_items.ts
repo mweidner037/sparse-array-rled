@@ -530,8 +530,9 @@ export function deserializeItems<I>(
     }
     previous = append(previous, node);
   }
+  // TODO: if the last node is deleted, trim it.
 
-  return previous.next;
+  return startHolder.next;
 }
 
 /**

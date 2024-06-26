@@ -9,15 +9,14 @@ import { checkIndex } from "./util";
 /**
  * Serialized form of a SparseString.
  *
- * The serialized form uses a compact JSON representation with run-length encoded deletions. It alternates between:
- * - strings of concatenated present chars (even indices), and
- * - numbers (odd indices), representing that number of deleted chars.
+ * The serialized form uses a compact JSON representation with run-length encoded deletions. It consists of:
+ * - strings of concatenated present chars,
+ * - embedded objects of type E, and
+ * - numbers, representing that number of deleted chars.
  *
  * For example, the sparse string `["a", "b", , , , "f", "g"]` serializes to `["ab", 3, "fg"]`.
  *
- * Trivial entries (empty strings, 0s, & trailing deletions) are always omitted,
- * except that the 0th entry may be an empty string.
- * For example, the sparse string `[, , "x", "y"]` serializes to `["", 2, "xy"]`.
+ * Trivial entries (empty strings, 0s, & trailing deletions) are always omitted.
  */
 export type SerializedSparseString<E extends object | never = never> = (
   | string
