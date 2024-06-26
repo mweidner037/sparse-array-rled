@@ -85,8 +85,6 @@ export abstract class SparseItems<I> {
    * Constructs a SparseItems with the given state, performing no validation.
    *
    * Don't override this constructor.
-   *
-   * TODO: if always called with null, remove arg.
    */
   protected constructor(start: Node<I> | null) {
     this.next = start;
@@ -96,8 +94,6 @@ export abstract class SparseItems<I> {
    * We can't directly force subclasses to use the same constructor; instead, we use
    * this abstract method to construct instances of `this` as if we had called
    * our own constructor.
-   *
-   * TODO: if always called with null, remove arg.
    */
   protected abstract construct(start: Node<I> | null): this;
 
@@ -336,27 +332,17 @@ export abstract class SparseItems<I> {
   /**
    * Returns a compact JSON-serializable representation of our state.
    *
+   * TODO
    * The return value uses a run-length encoding: it alternates between
    * - present items (even indices), and
    * - numbers (odd indices), representing that number of deleted values.
    */
   serialize(): (I | number)[] {
     const savedState: (I | number)[] = [];
-    const pairs = this.asPairs();
-    if (pairs.length === 0) return [];
-    else {
-      if (pairs[0].index !== 0) {
-        savedState.push(this.itemer().newEmpty(), pairs[0].index);
-      }
-      savedState.push(this.itemer().slice(pairs[0].item));
-      let lastEnd = pairs[0].index + this.itemer().length(pairs[0].item);
-      for (let i = 1; i < pairs.length; i++) {
-        savedState.push(
-          pairs[i].index - lastEnd,
-          this.itemer().slice(pairs[i].item)
-        );
-        lastEnd = pairs[i].index + this.itemer().length(pairs[i].item);
-      }
+    for (let current = this.next; current !== null; current = current.next) {
+      if (current instanceof PresentNode) {
+        savedState.push(current.cloneItem());
+      } else savedState.push(current.length);
     }
     return savedState;
   }
@@ -477,17 +463,18 @@ function locate<I>(
  * Connects before to after in the list, merging if possible.
  * Returns the final node, whose next pointer is *not* updated.
  */
-function append<I>(before: Node<I>, after: Node<I>): void {
+function append<I>(before: { next: Node<I> | null }, after: Node<I>): Node<I> {
   if (before instanceof PresentNode && after instanceof PresentNode) {
     const success = before.tryMergeContent(after);
-    if (success) return;
+    if (success) return before;
   } else if (before instanceof DeletedNode && after instanceof DeletedNode) {
     before.length += after.length;
-    return;
+    return before;
   }
 
   // Can't merge.
   before.next = after;
+  return after;
 }
 
 /**
@@ -508,45 +495,43 @@ function split<I>(node: Node<I>, offset: number): void {
  *
  * Each subclass implements a static `deserialize` method as
  * `return new <class>(deserializeItems(serialized, <class's itemer>))`.
+ *
+ * TODO: document number restriction. Might need a separate method for SparseIndices,
+ * along with serialize().
+ *
+ * @param newNode Unlike internal newNode method, must validate and shallow-clone item.
+ * If invalid, throw error. (It's user input.)
  */
 export function deserializeItems<I>(
   serialized: (I | number)[],
-  itemer: Itemer<I>
-): Pair<I>[] {
-  const pairs: Pair<I>[] = [];
-  let nextIndex = 0;
+  newNode: (allegedItem: unknown) => PresentNode<I>
+): Node<I> | null {
+  // To make constructing custom saved states easier, we tolerate
+  // 0-length items, adjacent mergeable items, and trailing deleted items.
 
-  if (serialized.length % 2 === 0 && serialized.length !== 0) {
-    throw new Error(
-      `Invalid serialized form: ends with deleted values ${serialized.at(-1)}`
-    );
-  }
-
-  for (let j = 0; j < serialized.length; j++) {
-    if (j % 2 === 0) {
-      const item = serialized[j] as I;
-      if (!itemer.isValid(item)) {
-        throw new Error(`Invalid item at serialized[${j}]: ${item}`);
+  const startHolder: { next: Node<I> | null } = { next: null };
+  let previous = startHolder;
+  for (let i = 0; i < serialized.length; i++) {
+    const maybeItem = serialized[i];
+    let node: Node<I>;
+    if (typeof maybeItem === "number") {
+      // Deleted node.
+      if (!Number.isSafeInteger(maybeItem) || maybeItem < 0) {
+        throw new Error(
+          `Invalid delete count at serialized[${i}]: ${maybeItem}`
+        );
       }
-      const itemLength = itemer.length(item);
-      if (itemLength === 0) {
-        if (j === 0) continue;
-        else {
-          throw new Error(`Invalid empty item at serialized[${j}]`);
-        }
-      }
-      pairs.push({ index: nextIndex, item: itemer.slice(item) });
-      nextIndex += itemLength;
+      if (maybeItem === 0) continue;
+      node = new DeletedNode(maybeItem);
     } else {
-      const deleted = serialized[j] as number;
-      if (!Number.isSafeInteger(deleted) || deleted <= 0) {
-        throw new Error(`Invalid delete count at serialized[${j}]: ${deleted}`);
-      }
-      nextIndex += deleted;
+      // Present node.
+      node = newNode(maybeItem);
+      if (node.length === 0) continue;
     }
+    previous = append(previous, node);
   }
 
-  return pairs;
+  return previous.next;
 }
 
 /**
