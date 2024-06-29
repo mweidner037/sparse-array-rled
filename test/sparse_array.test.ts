@@ -188,7 +188,7 @@ class Checker {
   }
 
   /**
-   * Test all _getAtCount inputs and some newSlicer walks.
+   * Test all indexOfCount inputs and some newSlicer walks.
    *
    * More expensive (O(length^2) ops), so only call occasionally,
    * in "interesting" states.
@@ -226,7 +226,7 @@ class Checker {
       prevEnd = index + values.length;
     }
 
-    // Test _getAtCount.
+    // Test indexOfCount.
     for (
       let startIndex = 0;
       startIndex < this.values.length + 2;
@@ -244,17 +244,9 @@ class Checker {
         }
         if (index >= this.values.length) {
           // count is too large - not found.
-          assert.deepStrictEqual(this.arr._getAtCount(count, startIndex), null);
           assert.strictEqual(this.arr.indexOfCount(count, startIndex), -1);
         } else {
           // Answer is index.
-          const actual = this.arr._getAtCount(count, startIndex);
-          assert.isNotNull(actual);
-          const [item, offset, actualIndex] = actual!;
-          assert.deepStrictEqual(
-            [item[offset], actualIndex],
-            [this.values[index], index]
-          );
           assert.strictEqual(this.arr.indexOfCount(count, startIndex), index);
         }
       }
