@@ -208,9 +208,9 @@ class Checker {
     assert.strictEqual(nextEntry, entries.length);
     assert.strictEqual(nextEntry, keys.length);
 
-    // Test fromEntries.
-    const arr2 = SparseArray.fromEntries(entries);
-    check(arr2, this.values);
+    // // Test fromEntries.
+    // const arr2 = SparseArray.fromEntries(entries);
+    // check(arr2, this.values);
 
     // Test items.
     const items = [...this.arr.items()];
@@ -617,43 +617,43 @@ describe("SparseArray", () => {
     }
   });
 
-  test("fromEntries errors", () => {
-    for (const bad of [-1, 0.5, NaN]) {
-      assert.throws(() => SparseArray.fromEntries([[bad, "x"]]));
-      assert.throws(() =>
-        SparseArray.fromEntries([
-          [0, "y"],
-          [bad, "x"],
-        ])
-      );
-    }
+  // test("fromEntries errors", () => {
+  //   for (const bad of [-1, 0.5, NaN]) {
+  //     assert.throws(() => SparseArray.fromEntries([[bad, "x"]]));
+  //     assert.throws(() =>
+  //       SparseArray.fromEntries([
+  //         [0, "y"],
+  //         [bad, "x"],
+  //       ])
+  //     );
+  //   }
 
-    assert.throws(() =>
-      SparseArray.fromEntries([
-        [0, "x"],
-        [1, "y"],
-        [1, "z"],
-      ])
-    );
+  //   assert.throws(() =>
+  //     SparseArray.fromEntries([
+  //       [0, "x"],
+  //       [1, "y"],
+  //       [1, "z"],
+  //     ])
+  //   );
 
-    assert.throws(() =>
-      SparseArray.fromEntries([
-        [0, "x"],
-        [2, "y"],
-        [1, "z"],
-      ])
-    );
+  //   assert.throws(() =>
+  //     SparseArray.fromEntries([
+  //       [0, "x"],
+  //       [2, "y"],
+  //       [1, "z"],
+  //     ])
+  //   );
 
-    assert.doesNotThrow(() => SparseArray.fromEntries([]));
-    assert.doesNotThrow(() => SparseArray.fromEntries([[1, "x"]]));
-    assert.doesNotThrow(() =>
-      SparseArray.fromEntries([
-        [1, "x"],
-        [7, "y"],
-        [1000, "z"],
-      ])
-    );
-  });
+  //   assert.doesNotThrow(() => SparseArray.fromEntries([]));
+  //   assert.doesNotThrow(() => SparseArray.fromEntries([[1, "x"]]));
+  //   assert.doesNotThrow(() =>
+  //     SparseArray.fromEntries([
+  //       [1, "x"],
+  //       [7, "y"],
+  //       [1000, "z"],
+  //     ])
+  //   );
+  // });
 
   test("deserialize errors", () => {
     for (const bad of [-1, 0.5, NaN]) {

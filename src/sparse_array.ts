@@ -93,39 +93,42 @@ export class SparseArray<T> extends SparseItems<T[]> {
     );
   }
 
-  /**
-   * Returns a new SparseArray with the given entries.
-   *
-   * The entries must be in order by index.
-   *
-   * @see SparseArray.entries
-   */
-  static fromEntries<T>(
-    entries: Iterable<[index: number, value: T]>
-  ): SparseArray<T> {
-    const pairs: Pair<T[]>[] = [];
-    let curLength = 0;
+  // TODO. Do we even need this method?
+  // If re-added, uncomment tests.
+  // /**
+  //  * Returns a new SparseArray with the given entries.
+  //  *
+  //  * The entries must be in order by index.
+  //  *
+  //  * @see SparseArray.entries
+  //  */
+  // static fromEntries<T>(
+  //   entries: Iterable<[index: number, value: T]>
+  // ): SparseArray<T> {
+  //   const startHolder: {next: Node<T[]> | null} = {next: null};
+  //   let current: Node<I> | null = null;
+  //   let curLength = 0;
 
-    for (const [index, value] of entries) {
-      if (index < curLength) {
-        throw new Error(
-          `Out-of-order index in entries: ${index}, previous was ${
-            curLength - 1
-          }`
-        );
-      }
+  //   for (const [index, value] of entries) {
+  //     if (index < curLength) {
+  //       throw new Error(
+  //         `Out-of-order index in entries: ${index}, previous was ${
+  //           curLength - 1
+  //         }`
+  //       );
+  //     }
 
-      if (index === curLength && pairs.length !== 0) {
-        pairs[pairs.length - 1].item.push(value);
-      } else {
-        checkIndex(index);
-        pairs.push({ index, item: [value] });
-      }
-      curLength = index + 1;
-    }
+  //     if (index === curLength && pairs.length !== 0) {
+  //       pairs[pairs.length - 1].item.push(value);
+  //     } else {
+  //       checkIndex(index);
+  //       pairs.push({ index, item: [value] });
+  //     }
+  //     curLength = index + 1;
+  //   }
 
-    return new SparseArray(pairs);
-  }
+  //   return new SparseArray(pairs);
+  // }
 
   /**
    * Returns a compact JSON representation of our state.

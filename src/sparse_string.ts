@@ -4,7 +4,6 @@ import {
   SparseItems,
   deserializeItems,
 } from "./sparse_items";
-import { checkIndex } from "./util";
 
 /**
  * Serialized form of a SparseString.
@@ -93,39 +92,39 @@ export class SparseString<E extends object | never = never> extends SparseItems<
     );
   }
 
-  /**
-   * Returns a new SparseString with the given entries.
-   *
-   * The entries must be in order by index.
-   *
-   * @see SparseString.entries
-   */
-  static fromEntries<E extends object | never = never>(
-    entries: Iterable<[index: number, char: string | E]>
-  ): SparseString<E> {
-    const pairs: Pair<string>[] = [];
-    let curLength = 0;
+  // /**
+  //  * Returns a new SparseString with the given entries.
+  //  *
+  //  * The entries must be in order by index.
+  //  *
+  //  * @see SparseString.entries
+  //  */
+  // static fromEntries<E extends object | never = never>(
+  //   entries: Iterable<[index: number, char: string | E]>
+  // ): SparseString<E> {
+  //   const pairs: Pair<string>[] = [];
+  //   let curLength = 0;
 
-    for (const [index, char] of entries) {
-      if (index < curLength) {
-        throw new Error(
-          `Out-of-order index in entries: ${index}, previous was ${
-            curLength - 1
-          }`
-        );
-      }
+  //   for (const [index, char] of entries) {
+  //     if (index < curLength) {
+  //       throw new Error(
+  //         `Out-of-order index in entries: ${index}, previous was ${
+  //           curLength - 1
+  //         }`
+  //       );
+  //     }
 
-      if (index === curLength && pairs.length !== 0) {
-        pairs[pairs.length - 1].item += char;
-      } else {
-        checkIndex(index);
-        pairs.push({ index, item: char });
-      }
-      curLength = index + 1;
-    }
+  //     if (index === curLength && pairs.length !== 0) {
+  //       pairs[pairs.length - 1].item += char;
+  //     } else {
+  //       checkIndex(index);
+  //       pairs.push({ index, item: char });
+  //     }
+  //     curLength = index + 1;
+  //   }
 
-    return new SparseString(pairs);
-  }
+  //   return new SparseString(pairs);
+  // }
 
   /**
    * Returns a compact JSON representation of our state.
@@ -149,7 +148,7 @@ export class SparseString<E extends object | never = never> extends SparseItems<
     else return item;
   }
 
-  newSlicer(): StringSlicer {
+  newSlicer(): StringSlicer<E> {
     return super.newSlicer();
   }
 
