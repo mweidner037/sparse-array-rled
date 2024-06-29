@@ -207,7 +207,7 @@ class ArrayNode<T> extends PresentNode<T[]> {
     return true;
   }
 
-  cloneItem(): T[] {
-    return this.item.slice();
+  sliceItem(start?: number, end?: number): T[] {
+    return this.item.slice(start, end);
   }
 }

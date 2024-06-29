@@ -216,8 +216,8 @@ class StringNode extends PresentNode<string> {
     return false;
   }
 
-  cloneItem(): string {
-    return this.item;
+  sliceItem(start?: number, end?: number): string {
+    return this.item.slice(start, end);
   }
 }
 
@@ -238,7 +238,7 @@ class EmbedNode<E extends object | never> extends PresentNode<E> {
     return false;
   }
 
-  cloneItem(): E {
+  sliceItem(): E {
     // We don't deep-clone values, only their wrapper items.
     return this.item;
   }

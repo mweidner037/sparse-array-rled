@@ -24,9 +24,12 @@ export abstract class PresentNode<I> {
    */
   abstract tryMergeContent(other: PresentNode<I>): boolean;
   /**
-   * Return a shallow copy of this.item.
+   * Return a slice of this.item, as a shallow copy.
+   *
+   * Default to 0/this.length; don't need to do slice() wrapping.
+   * Guaranteed non-empty ((start ?? 0) < (end ?? length)).
    */
-  abstract cloneItem(): I;
+  abstract sliceItem(start?: number, end?: number): I;
 }
 
 class DeletedNode<I> {
@@ -258,7 +261,7 @@ export abstract class SparseItems<I> {
    * since it "remembers its place" in our internal state.
    */
   newSlicer(): ItemSlicer<I> {
-    return new PairSlicer(this.itemer(), this.asPairs());
+    return new PairSlicer(this.next);
   }
 
   // *items(): IterableIterator<[index: number, item: I]> {
@@ -293,7 +296,7 @@ export abstract class SparseItems<I> {
     let index = 0;
     for (let current = this.next; current !== null; current = current.next) {
       if (current instanceof PresentNode) {
-        yield [index, current.cloneItem()];
+        yield [index, current.sliceItem()];
       }
       index += current.length;
     }
@@ -325,8 +328,9 @@ export abstract class SparseItems<I> {
    * Clones node's content while leaving next = null.
    */
   private cloneNode(node: Node<I>): Node<I> {
-    if (node instanceof PresentNode) return this.newNode(node.cloneItem());
-    else return new DeletedNode(node.length);
+    if (node instanceof PresentNode) {
+      return this.newNode(node.sliceItem());
+    } else return new DeletedNode(node.length);
   }
 
   /**
@@ -341,7 +345,7 @@ export abstract class SparseItems<I> {
     const savedState: (I | number)[] = [];
     for (let current = this.next; current !== null; current = current.next) {
       if (current instanceof PresentNode) {
-        savedState.push(current.cloneItem());
+        savedState.push(current.sliceItem());
       } else savedState.push(current.length);
     }
     return savedState;
@@ -384,7 +388,7 @@ export abstract class SparseItems<I> {
   }
 
   // TODO: careful about aliasing
-  // TODO: check for no-deleted-ends in tests
+  // TODO: check for no-deleted-ends in tests, incl after loading
   private overwrite(index: number, node: Node<I>): this {
     checkIndex(index);
 
@@ -478,6 +482,28 @@ function append<I>(before: { next: Node<I> | null }, after: Node<I>): Node<I> {
 }
 
 /**
+ * Connects before to after in the list, merging if possible.
+ * Returns the final node, whose next pointer is *not* updated.
+ */
+function appendWithHolder<I>(
+  before: { next: Node<I> | null },
+  after: Node<I>,
+  beforeHolder: { next: Node<I> | null }
+): [final: Node<I>, finalHolder: { next: Node<I> | null }] {
+  if (before instanceof PresentNode && after instanceof PresentNode) {
+    const success = before.tryMergeContent(after);
+    if (success) return [before, beforeHolder];
+  } else if (before instanceof DeletedNode && after instanceof DeletedNode) {
+    before.length += after.length;
+    return [before, beforeHolder];
+  }
+
+  // Can't merge.
+  before.next = after;
+  return [after, before];
+}
+
+/**
  * Splits the node at the given offset (if needed).
  *
  * @param offset 0 < offset <= node.length
@@ -511,6 +537,8 @@ export function deserializeItems<I>(
 
   const startHolder: { next: Node<I> | null } = { next: null };
   let previous = startHolder;
+  // The node s.t. node.next = previous. It's okay that this starts inaccurate.
+  let previousHolder = startHolder;
   for (let i = 0; i < serialized.length; i++) {
     const maybeItem = serialized[i];
     let node: Node<I>;
@@ -528,9 +556,16 @@ export function deserializeItems<I>(
       node = newNode(maybeItem);
       if (node.length === 0) continue;
     }
-    previous = append(previous, node);
+    [previous, previousHolder] = appendWithHolder(
+      previous,
+      node,
+      previousHolder
+    );
   }
-  // TODO: if the last node is deleted, trim it.
+  // If the last node is deleted, trim it.
+  if (previous instanceof DeletedNode) {
+    previousHolder.next = null;
+  }
 
   return startHolder.next;
 }
@@ -539,14 +574,12 @@ export function deserializeItems<I>(
  * Templated implementation of ItemSlicer, used by SparseItems.newSlicer.
  */
 class PairSlicer<I> implements ItemSlicer<I> {
-  private i = 0;
+  /** First index in this.current. */
+  private currentIndex = 0;
   private offset = 0;
   private prevEnd: number | null = 0;
 
-  constructor(
-    private readonly itemer: Itemer<I>,
-    private readonly pairs: readonly Pair<I>[]
-  ) {}
+  constructor(private current: Node<I> | null) {}
 
   /**
    * Returns an array of items in the next slice,
@@ -576,26 +609,30 @@ class PairSlicer<I> implements ItemSlicer<I> {
 
     const ret: Array<[index: number, item: I]> = [];
 
-    while (this.i < this.pairs.length) {
-      const pair = this.pairs[this.i];
-      if (endIndex !== null && endIndex <= pair.index) return ret;
-      const pairEnd = pair.index + this.itemer.length(pair.item);
-      if (endIndex === null || endIndex >= pairEnd) {
-        ret.push([
-          pair.index + this.offset,
-          // Always slice, to prevent exposing internal items.
-          this.itemer.slice(pair.item, this.offset),
-        ]);
-        this.i++;
+    while (this.current !== null) {
+      if (endIndex !== null && endIndex <= this.currentIndex) return ret;
+      const currentEnd = this.currentIndex + this.current.length;
+      if (endIndex === null || endIndex >= currentEnd) {
+        if (this.current instanceof PresentNode) {
+          ret.push([
+            this.currentIndex + this.offset,
+            // Always slice, to prevent exposing internal items.
+            this.current.sliceItem(this.offset),
+          ]);
+        }
+        this.currentIndex += this.current.length;
+        this.current = this.current.next;
         this.offset = 0;
       } else {
-        const endOffset = endIndex - pair.index;
+        const endOffset = endIndex - this.currentIndex;
         // Handle duplicate-endIndex case without empty emits.
         if (endOffset > this.offset) {
-          ret.push([
-            pair.index + this.offset,
-            this.itemer.slice(pair.item, this.offset, endOffset),
-          ]);
+          if (this.current instanceof PresentNode) {
+            ret.push([
+              this.currentIndex + this.offset,
+              this.current.sliceItem(this.offset, endOffset),
+            ]);
+          }
           this.offset = endOffset;
         }
         return ret;
