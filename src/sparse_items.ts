@@ -32,7 +32,7 @@ export abstract class PresentNode<I> {
   abstract sliceItem(start?: number, end?: number): I;
 }
 
-class DeletedNode<I> {
+export class DeletedNode<I> {
   next: Node<I> | null = null;
   constructor(public length: number) {}
   /**

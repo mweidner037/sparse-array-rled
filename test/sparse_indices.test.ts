@@ -2,13 +2,17 @@ import { assert } from "chai";
 import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
 import { SerializedSparseIndices, SparseIndices } from "../src";
-import { Pair } from "../src/sparse_items";
+import { DeletedNode } from "../src/sparse_items";
 
 const DEBUG = false;
 
-function getState(arr: SparseIndices): Pair<number>[] {
-  // @ts-expect-error Ignore protected
-  return arr.asPairs();
+function getState(arr: SparseIndices): unknown[] {
+  const nodes: unknown[] = [];
+  // @ts-expect-error Ignore private.
+  for (let current = arr.next; current !== null; current = current.next) {
+    nodes.push(current instanceof DeletedNode ? -current.length : current.item);
+  }
+  return nodes;
 }
 
 function validate(pairs: Pair<number>[]): void {
@@ -207,9 +211,9 @@ class Checker {
     }
     assert.strictEqual(nextEntry, keys.length);
 
-    // Test fromKeys.
-    const arr2 = SparseIndices.fromKeys(keys);
-    check(arr2, this.values);
+    // // Test fromKeys.
+    // const arr2 = SparseIndices.fromKeys(keys);
+    // check(arr2, this.values);
 
     // Test items.
     const items = [...this.arr.items()];
@@ -582,20 +586,20 @@ describe("SparseIndices", () => {
     }
   });
 
-  test("fromKeys errors", () => {
-    for (const bad of [-1, 0.5, NaN]) {
-      assert.throws(() => SparseIndices.fromKeys([bad]));
-      assert.throws(() => SparseIndices.fromKeys([0, bad]));
-    }
+  // test("fromKeys errors", () => {
+  //   for (const bad of [-1, 0.5, NaN]) {
+  //     assert.throws(() => SparseIndices.fromKeys([bad]));
+  //     assert.throws(() => SparseIndices.fromKeys([0, bad]));
+  //   }
 
-    assert.throws(() => SparseIndices.fromKeys([0, 1, 1]));
+  //   assert.throws(() => SparseIndices.fromKeys([0, 1, 1]));
 
-    assert.throws(() => SparseIndices.fromKeys([0, 2, 1]));
+  //   assert.throws(() => SparseIndices.fromKeys([0, 2, 1]));
 
-    assert.doesNotThrow(() => SparseIndices.fromKeys([]));
-    assert.doesNotThrow(() => SparseIndices.fromKeys([1]));
-    assert.doesNotThrow(() => SparseIndices.fromKeys([1, 7, 1000]));
-  });
+  //   assert.doesNotThrow(() => SparseIndices.fromKeys([]));
+  //   assert.doesNotThrow(() => SparseIndices.fromKeys([1]));
+  //   assert.doesNotThrow(() => SparseIndices.fromKeys([1, 7, 1000]));
+  // });
 
   test("deserialize errors", () => {
     for (const bad of [-1, 0.5, NaN]) {

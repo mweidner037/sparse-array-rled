@@ -4,7 +4,6 @@ import {
   SparseItems,
   deserializeItems,
 } from "./sparse_items";
-import { checkIndex } from "./util";
 
 /**
  * Serialized form of a `SparseArray<T>`.

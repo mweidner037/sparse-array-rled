@@ -1,5 +1,9 @@
-import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
-import { checkIndex } from "./util";
+import {
+  SparseItems,
+  deserializeItems,
+  PresentNode,
+  Node,
+} from "./sparse_items";
 
 // TODO: needs to use different serialize/deserialize.
 // TODO: update serialized form descriptions on other classes (no longer alternating or strict start).
@@ -54,7 +58,7 @@ export class SparseIndices extends SparseItems<number> {
    * Returns a new, empty SparseIndices.
    */
   static new(): SparseIndices {
-    return new SparseIndices([]);
+    return new SparseIndices(null);
   }
 
   /**
@@ -64,40 +68,52 @@ export class SparseIndices extends SparseItems<number> {
    * @throws If the serialized form is invalid (see `SparseIndices.serialize`).
    */
   static deserialize(serialized: SerializedSparseIndices): SparseIndices {
-    return new SparseIndices(deserializeItems(serialized, indexesItemer));
+    // TODO: needs to be special b/c deleted-start rule
+    return new SparseIndices(
+      deserializeItems(serialized, (allegedItem) => {
+        if (
+          !(Number.isSafeInteger(allegedItem) && (allegedItem as number) >= 0)
+        ) {
+          throw new Error(`Invalid item in serialized state: ${allegedItem}`);
+        }
+        return new NumberNode(allegedItem as number);
+      })
+    );
   }
 
-  /**
-   * Returns a new SparseIndices with the given keys (indices).
-   *
-   * The keys must be in order by index.
-   *
-   * @see SparseIndices.keys
-   */
-  static fromKeys(keys: Iterable<number>): SparseIndices {
-    const pairs: Pair<number>[] = [];
-    let curLength = 0;
+  // TODO. Do we even need this method?
+  // If re-added, uncomment tests.
+  // /**
+  //  * Returns a new SparseIndices with the given keys (indices).
+  //  *
+  //  * The keys must be in order by index.
+  //  *
+  //  * @see SparseIndices.keys
+  //  */
+  // static fromKeys(keys: Iterable<number>): SparseIndices {
+  //   const pairs: Pair<number>[] = [];
+  //   let curLength = 0;
 
-    for (const index of keys) {
-      if (index < curLength) {
-        throw new Error(
-          `Out-of-order index in entries: ${index}, previous was ${
-            curLength - 1
-          }`
-        );
-      }
+  //   for (const index of keys) {
+  //     if (index < curLength) {
+  //       throw new Error(
+  //         `Out-of-order index in entries: ${index}, previous was ${
+  //           curLength - 1
+  //         }`
+  //       );
+  //     }
 
-      if (index === curLength && pairs.length !== 0) {
-        pairs[pairs.length - 1].item++;
-      } else {
-        checkIndex(index);
-        pairs.push({ index, item: 1 });
-      }
-      curLength = index + 1;
-    }
+  //     if (index === curLength && pairs.length !== 0) {
+  //       pairs[pairs.length - 1].item++;
+  //     } else {
+  //       checkIndex(index);
+  //       pairs.push({ index, item: 1 });
+  //     }
+  //     curLength = index + 1;
+  //   }
 
-    return new SparseIndices(pairs);
-  }
+  //   return new SparseIndices(pairs);
+  // }
 
   /**
    * Returns a compact JSON representation of our state.
@@ -124,43 +140,36 @@ export class SparseIndices extends SparseItems<number> {
     return this._set(index, count);
   }
 
-  protected construct(pairs: Pair<number>[]): this {
-    return new SparseIndices(pairs) as this;
+  protected construct(start: Node<number> | null): this {
+    return new SparseIndices(start) as this;
   }
 
-  protected itemer() {
-    return indexesItemer;
+  protected newNode(item: number): PresentNode<number> {
+    return new NumberNode(item);
   }
 }
 
-const indexesItemer: Itemer<number> = {
-  isValid(allegedItem: unknown): boolean {
-    return Number.isSafeInteger(allegedItem) && <number>allegedItem >= 0;
-  },
+class NumberNode extends PresentNode<number> {
+  constructor(public item: number) {
+    super();
+  }
 
-  newEmpty(): number {
-    return 0;
-  },
+  get length(): number {
+    return this.item;
+  }
 
-  length(item: number): number {
-    return item;
-  },
+  splitContent(index: number): PresentNode<number> {
+    const after = new NumberNode(this.item - index);
+    this.item = index;
+    return after;
+  }
 
-  merge(a: number, b: number): number {
-    return a + b;
-  },
+  tryMergeContent(other: PresentNode<number>): boolean {
+    this.item += (other as NumberNode).item;
+    return true;
+  }
 
-  slice(item: number, start?: number, end?: number): number {
-    const realStart = start === undefined ? 0 : Math.min(start, item);
-    const realEnd = end === undefined ? item : Math.min(end, item);
-    return realEnd - realStart;
-  },
-
-  update(item: number, index: number, replace: number): number {
-    return Math.max(item, index + replace);
-  },
-
-  shorten(_item: number, newLength: number): number {
-    return newLength;
-  },
-} as const;
+  sliceItem(start?: number, end?: number): number {
+    return (end ?? this.item) - (start ?? 0);
+  }
+}

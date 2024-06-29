@@ -2,13 +2,19 @@ import { assert } from "chai";
 import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
 import { SerializedSparseString, SparseString } from "../src";
-import { Pair } from "../src/sparse_items";
+import { DeletedNode } from "../src/sparse_items";
 
 const DEBUG = false;
 
-function getState(arr: SparseString): Pair<string>[] {
-  // @ts-expect-error Ignore protected
-  return arr.asPairs();
+// TODO: embed tests.
+
+function getState(arr: SparseString): unknown[] {
+  const nodes: unknown[] = [];
+  // @ts-expect-error Ignore private.
+  for (let current = arr.next; current !== null; current = current.next) {
+    nodes.push(current instanceof DeletedNode ? -current.length : current.item);
+  }
+  return nodes;
 }
 
 function validate(pairs: Pair<string>[]): void {
