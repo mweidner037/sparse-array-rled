@@ -269,12 +269,6 @@ class Checker {
         countBetween(this.values, 0, i),
         i < this.values.length && this.values[i] !== null,
       ]);
-      for (let j = i; j < this.values.length + 2; j++) {
-        assert.strictEqual(
-          this.arr.countBetween(i, j),
-          countBetween(this.values, i, j)
-        );
-      }
     }
 
     // Test newSlicer 10x with random slices.
@@ -551,17 +545,6 @@ describe("SparseArray", () => {
 
       // Each error case should throw and not change the array.
       // Indices >= length should *not* throw errors.
-
-      // countBetween
-      for (const bad of [-1, 0.5, NaN]) {
-        assert.throws(() => arr.countBetween(bad, 3));
-      }
-      for (const bad of [-1, 0.5, NaN]) {
-        assert.throws(() => arr.countBetween(0, bad));
-      }
-      assert.throws(() => arr.countBetween(1, -3));
-      assert.doesNotThrow(() => arr.countBetween(15, 18));
-      assert.deepStrictEqual(arr.serialize(), initial);
 
       // countAt
       for (const bad of [-1, 0.5, NaN]) {
