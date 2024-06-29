@@ -2,50 +2,52 @@ import { assert } from "chai";
 import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
 import { SerializedSparseArray, SparseArray } from "../src";
-import { DeletedNode } from "../src/sparse_items";
+import { DeletedNode, Node } from "../src/sparse_items";
 
 const DEBUG = false;
 
-function getState<T>(arr: SparseArray<T>): unknown[] {
-  const nodes: unknown[] = [];
+function getState<T>(arr: SparseArray<T>): Node<T[]>[] {
+  const nodes: Node<T[]>[] = [];
   // @ts-expect-error Ignore private.
   for (let current = arr.next; current !== null; current = current.next) {
-    nodes.push(current instanceof DeletedNode ? -current.length : current.item);
+    nodes.push(current);
   }
   return nodes;
 }
 
-function validate<T>(pairs: Pair<T[]>[]): void {
-  // No nonsense i's.
-  assert.doesNotHaveAnyKeys(pairs, ["-1", "-2", "-0"]);
-
-  // In order.
-  for (let i = 0; i < pairs.length - 1; i++) {
-    assert.isBelow(pairs[i].index, pairs[i + 1].index);
-  }
-
+function validate<T>(nodes: Node<T[]>[]): void {
   // Proper types.
-  for (let i = 0; i < pairs.length; i++) {
-    assert.isArray(pairs[i].item);
+  for (const node of nodes) {
+    if (node instanceof DeletedNode) {
+      assert.isNumber(node.length);
+    } else {
+      assert.isArray(node.item);
+    }
   }
 
   // No empty items.
-  for (let i = 0; i < pairs.length; i++) {
-    assert.notStrictEqual(pairs[i].item.length, 0);
+  for (let i = 0; i < nodes.length; i++) {
+    assert.notStrictEqual(nodes[i].length, 0);
   }
 
-  // No overlapping or joinable segments.
-  for (let i = 0; i < pairs.length - 1; i++) {
-    const thisEnd = pairs[i].index + pairs[i].item.length;
-    const nextStart = pairs[i + 1].index;
-    assert.isBelow(thisEnd, nextStart);
+  // No joinable nodes.
+  for (let i = 0; i < nodes.length - 1; i++) {
+    assert.notStrictEqual(
+      nodes[i].constructor.name,
+      nodes[i + 1].constructor.name
+    );
+  }
+
+  // Last node is not deleted.
+  if (nodes.length !== 0) {
+    assert.isFalse(nodes[nodes.length - 1] instanceof DeletedNode);
   }
 }
 
-function getPresentLength<T>(pairs: Pair<T[]>[]): number {
-  if (pairs.length === 0) return 0;
-  const lastPair = pairs.at(-1)!;
-  return lastPair.index + lastPair.item.length;
+function getPresentLength<T>(nodes: Node<T[]>[]): number {
+  let length = 0;
+  for (const node of nodes) length += node.length;
+  return length;
 }
 
 function getValuesLength<T>(values: (T | null)[]): number {

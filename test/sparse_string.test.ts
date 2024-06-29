@@ -2,52 +2,54 @@ import { assert } from "chai";
 import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
 import { SerializedSparseString, SparseString } from "../src";
-import { DeletedNode } from "../src/sparse_items";
+import { DeletedNode, Node } from "../src/sparse_items";
 
 const DEBUG = false;
 
 // TODO: embed tests.
 
-function getState(arr: SparseString): unknown[] {
-  const nodes: unknown[] = [];
+function getState<T>(arr: SparseString): Node<string>[] {
+  const nodes: Node<string>[] = [];
   // @ts-expect-error Ignore private.
   for (let current = arr.next; current !== null; current = current.next) {
-    nodes.push(current instanceof DeletedNode ? -current.length : current.item);
+    nodes.push(current);
   }
   return nodes;
 }
 
-function validate(pairs: Pair<string>[]): void {
-  // No nonsense i's.
-  assert.doesNotHaveAnyKeys(pairs, ["-1", "-2", "-0"]);
-
-  // In order.
-  for (let i = 0; i < pairs.length - 1; i++) {
-    assert.isBelow(pairs[i].index, pairs[i + 1].index);
-  }
-
+function validate(nodes: Node<string>[]): void {
   // Proper types.
-  for (let i = 0; i < pairs.length; i++) {
-    assert.isString(pairs[i].item);
+  for (const node of nodes) {
+    if (node instanceof DeletedNode) {
+      assert.isNumber(node.length);
+    } else {
+      assert.isString(node.item);
+    }
   }
 
   // No empty items.
-  for (let i = 0; i < pairs.length; i++) {
-    assert.notStrictEqual(pairs[i].item.length, 0);
+  for (let i = 0; i < nodes.length; i++) {
+    assert.notStrictEqual(nodes[i].length, 0);
   }
 
-  // No overlapping or joinable segments.
-  for (let i = 0; i < pairs.length - 1; i++) {
-    const thisEnd = pairs[i].index + pairs[i].item.length;
-    const nextStart = pairs[i + 1].index;
-    assert.isBelow(thisEnd, nextStart);
+  // No joinable nodes.
+  for (let i = 0; i < nodes.length - 1; i++) {
+    assert.notStrictEqual(
+      nodes[i].constructor.name,
+      nodes[i + 1].constructor.name
+    );
+  }
+
+  // Last node is not deleted.
+  if (nodes.length !== 0) {
+    assert.isFalse(nodes[nodes.length - 1] instanceof DeletedNode);
   }
 }
 
-function getPresentLength(pairs: Pair<string>[]): number {
-  if (pairs.length === 0) return 0;
-  const lastPair = pairs.at(-1)!;
-  return lastPair.index + lastPair.item.length;
+function getPresentLength(nodes: Node<string>[]): number {
+  let length = 0;
+  for (const node of nodes) length += node.length;
+  return length;
 }
 
 function getValuesLength<T>(values: (T | null)[]): number {
@@ -79,7 +81,7 @@ function check(arr: SparseString, values: (string | null)[]) {
 function entriesAsItems(
   entries: Array<[index: number, char: string]>
 ): Array<[index: number, item: string]> {
-  const pairs: Pair<string>[] = [];
+  const pairs: { index: number; item: string }[] = [];
   let curLength = 0;
 
   for (const [index, char] of entries) {
