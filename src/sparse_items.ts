@@ -193,7 +193,7 @@ export abstract class SparseItems<I> {
 
     let remaining = index;
     for (let current = this.next; current !== null; current = current.next) {
-      if (current.length < remaining) {
+      if (remaining < current.length) {
         if (current instanceof DeletedNode) return null;
         else return [current.item, remaining];
       }
@@ -417,6 +417,7 @@ export abstract class SparseItems<I> {
       left.next = null;
     }
 
+    // TODO: need to trim replaced (preRight might be deleted).
     const replaced = this.construct(null);
     replaced.next = replacedStart;
     return replaced;

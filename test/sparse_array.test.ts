@@ -4,7 +4,7 @@ import seedrandom from "seedrandom";
 import { SerializedSparseArray, SparseArray } from "../src";
 import { DeletedNode, Node } from "../src/sparse_items";
 
-const DEBUG = false;
+const DEBUG = true;
 
 function getState<T>(arr: SparseArray<T>): Node<T[]>[] {
   const nodes: Node<T[]>[] = [];
