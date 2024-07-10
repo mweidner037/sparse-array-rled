@@ -3,8 +3,7 @@ import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
 import { SerializedSparseIndices, SparseIndices } from "../src";
 import { DeletedNode, Node } from "../src/sparse_items";
-
-const DEBUG = false;
+import { DEBUG } from "./util";
 
 function getState(arr: SparseIndices): Node<number>[] {
   const nodes: Node<number>[] = [];
@@ -37,16 +36,15 @@ function validate(nodes: Node<string>[]): void {
       nodes[i + 1].constructor.name
     );
   }
-
-  // Last node is not deleted.
-  if (nodes.length !== 0) {
-    assert.isFalse(nodes[nodes.length - 1] instanceof DeletedNode);
-  }
 }
 
 function getPresentLength(nodes: Node<number>[]): number {
   let length = 0;
   for (const node of nodes) length += node.length;
+  // Handle untrimmed case.
+  if (nodes.length !== 0 && nodes[nodes.length - 1] instanceof DeletedNode) {
+    length -= nodes[nodes.length - 1].length;
+  }
   return length;
 }
 

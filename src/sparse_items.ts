@@ -82,6 +82,13 @@ export interface ItemSlicer<I> {
  * @typeParam I The type of items. Items must never be null.
  */
 export abstract class SparseItems<I> {
+  /**
+   * A linked list of nodes.
+   *
+   * Neighboring nodes are always merged when possible. However, the list
+   * is not necessarily trimmed: it may end in a (redundant) DeletedNode,
+   * which is not visible externally.
+   */
   private next: Node<I> | null = null;
 
   /**
@@ -113,10 +120,15 @@ export abstract class SparseItems<I> {
    * to include additional holes.
    */
   get length(): number {
+    if (this.next === null) return 0;
+
     let ans = 0;
-    for (let current = this.next; current !== null; current = current.next) {
+    let current = this.next;
+    for (; current.next !== null; current = current.next) {
       ans += current.length;
     }
+    // Now current equals the last node. Only count it if it is present.
+    if (current instanceof PresentNode) ans += current.length;
     return ans;
   }
 
@@ -126,7 +138,7 @@ export abstract class SparseItems<I> {
   count(): number {
     let count = 0;
     for (let current = this.next; current !== null; current = current.next) {
-      if (!(current instanceof DeletedNode)) {
+      if (current instanceof PresentNode) {
         count += current.length;
       }
     }
@@ -178,7 +190,10 @@ export abstract class SparseItems<I> {
    * Note that an array may be empty but have nonzero length.
    */
   isEmpty(): boolean {
-    return this.next === null;
+    return (
+      this.next === null ||
+      (this.next instanceof DeletedNode && this.next.next === null)
+    );
   }
 
   /**
@@ -343,11 +358,20 @@ export abstract class SparseItems<I> {
    */
   serialize(): (I | number)[] {
     const savedState: (I | number)[] = [];
+    let lastIsDeleted = false;
     for (let current = this.next; current !== null; current = current.next) {
       if (current instanceof PresentNode) {
         savedState.push(current.sliceItem());
-      } else savedState.push(current.length);
+        lastIsDeleted = false;
+      } else {
+        savedState.push(current.length);
+        lastIsDeleted = true;
+      }
     }
+
+    // Trim the serialized state.
+    if (lastIsDeleted) savedState.length--;
+
     return savedState;
   }
 
@@ -412,12 +436,6 @@ export abstract class SparseItems<I> {
     node.next = preRight.next;
     preRight.next = null;
 
-    // If the new node is last and it's deleted, trim it.
-    if (node.next === null && node instanceof DeletedNode) {
-      left.next = null;
-    }
-
-    // TODO: need to trim replaced (preRight might be deleted).
     const replaced = this.construct(null);
     replaced.next = replacedStart;
     return replaced;
@@ -483,28 +501,6 @@ function append<I>(before: { next: Node<I> | null }, after: Node<I>): Node<I> {
 }
 
 /**
- * Connects before to after in the list, merging if possible.
- * Returns the final node, whose next pointer is *not* updated.
- */
-function appendWithHolder<I>(
-  before: { next: Node<I> | null },
-  after: Node<I>,
-  beforeHolder: { next: Node<I> | null }
-): [final: Node<I>, finalHolder: { next: Node<I> | null }] {
-  if (before instanceof PresentNode && after instanceof PresentNode) {
-    const success = before.tryMergeContent(after);
-    if (success) return [before, beforeHolder];
-  } else if (before instanceof DeletedNode && after instanceof DeletedNode) {
-    before.length += after.length;
-    return [before, beforeHolder];
-  }
-
-  // Can't merge.
-  before.next = after;
-  return [after, before];
-}
-
-/**
  * Splits the node at the given offset (if needed).
  *
  * @param offset 0 < offset <= node.length
@@ -516,6 +512,8 @@ function split<I>(node: Node<I>, offset: number): void {
     node.next = after;
   }
 }
+
+// TODO: test that untrimmed cases are not externally visible (length, isEmpty, serialized).
 
 /**
  * Templated implementation of deserialization
@@ -538,8 +536,6 @@ export function deserializeItems<I>(
 
   const startHolder: { next: Node<I> | null } = { next: null };
   let previous = startHolder;
-  // The node s.t. node.next = previous. It's okay that this starts inaccurate.
-  let previousHolder = startHolder;
   for (let i = 0; i < serialized.length; i++) {
     const maybeItem = serialized[i];
     let node: Node<I>;
@@ -557,15 +553,7 @@ export function deserializeItems<I>(
       node = newNode(maybeItem);
       if (node.length === 0) continue;
     }
-    [previous, previousHolder] = appendWithHolder(
-      previous,
-      node,
-      previousHolder
-    );
-  }
-  // If the last node is deleted, trim it.
-  if (previous instanceof DeletedNode) {
-    previousHolder.next = null;
+    previous = append(previous, node);
   }
 
   return startHolder.next;

@@ -3,8 +3,7 @@ import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
 import { SerializedSparseArray, SparseArray } from "../src";
 import { DeletedNode, Node } from "../src/sparse_items";
-
-const DEBUG = true;
+import { DEBUG } from "./util";
 
 function getState<T>(arr: SparseArray<T>): Node<T[]>[] {
   const nodes: Node<T[]>[] = [];
@@ -37,16 +36,15 @@ function validate<T>(nodes: Node<T[]>[]): void {
       nodes[i + 1].constructor.name
     );
   }
-
-  // Last node is not deleted.
-  if (nodes.length !== 0) {
-    assert.isFalse(nodes[nodes.length - 1] instanceof DeletedNode);
-  }
 }
 
 function getPresentLength<T>(nodes: Node<T[]>[]): number {
   let length = 0;
   for (const node of nodes) length += node.length;
+  // Handle untrimmed case.
+  if (nodes.length !== 0 && nodes[nodes.length - 1] instanceof DeletedNode) {
+    length -= nodes[nodes.length - 1].length;
+  }
   return length;
 }
 
