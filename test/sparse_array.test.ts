@@ -375,6 +375,17 @@ describe("SparseArray", () => {
     }
   });
 
+  test("ops from serialize test", () => {
+    const checker = new Checker();
+    checker.set(0, "a", "b");
+    checker.delete(0, 2);
+    checker.set(5, "c", "d");
+    checker.delete(0, 10);
+    checker.set(0, "x");
+    checker.set(2, "y", "z");
+    checker.set(7, "A", "B", "C");
+  });
+
   describe("fuzz", () => {
     test("single char ops", () => {
       const checker = new Checker();
@@ -515,7 +526,7 @@ describe("SparseArray", () => {
     assert.deepStrictEqual(arr.serialize(), []);
 
     arr.set(5, "c", "d");
-    assert.deepStrictEqual(arr.serialize(), [[], 5, ["c", "d"]]);
+    assert.deepStrictEqual(arr.serialize(), [5, ["c", "d"]]);
 
     arr.delete(0, 10);
     assert.deepStrictEqual(arr.serialize(), []);

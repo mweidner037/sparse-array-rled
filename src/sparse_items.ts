@@ -357,20 +357,21 @@ export abstract class SparseItems<I> {
    * - numbers (odd indices), representing that number of deleted values.
    */
   serialize(): (I | number)[] {
+    if (this.next === null) return [];
+
     const savedState: (I | number)[] = [];
-    let lastIsDeleted = false;
-    for (let current = this.next; current !== null; current = current.next) {
+    let current = this.next;
+    for (; current.next !== null; current = current.next) {
       if (current instanceof PresentNode) {
         savedState.push(current.sliceItem());
-        lastIsDeleted = false;
       } else {
         savedState.push(current.length);
-        lastIsDeleted = true;
       }
     }
-
-    // Trim the serialized state.
-    if (lastIsDeleted) savedState.length--;
+    // Now current equals the last node. Only push it if it is present.
+    if (current instanceof PresentNode) {
+      savedState.push(current.sliceItem());
+    }
 
     return savedState;
   }
@@ -471,10 +472,7 @@ function createSplit<I>(start: Node<I>, delta: number): Node<I> {
   // eslint-disable-next-line prefer-const
   let [left, leftOffset, leftOutside] = locate(start, delta);
   if (leftOutside) {
-    const preLeft = left;
-    left = new DeletedNode<I>(leftOffset - preLeft.length);
-    leftOffset -= preLeft.length;
-    append(preLeft, left);
+    left = append(left, new DeletedNode(leftOffset - left.length));
   } else split(left, leftOffset);
   return left;
 }
