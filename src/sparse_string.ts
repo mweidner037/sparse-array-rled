@@ -83,7 +83,8 @@ export class SparseString<E extends object | never = never> extends SparseItems<
       deserializeItems<string | E>(serialized, (allegedItem) => {
         if (typeof allegedItem === "string") {
           return new StringNode(allegedItem);
-        } else if (typeof allegedItem === "object") {
+        } else if (typeof allegedItem === "object" && allegedItem !== null) {
+          // We exclude null as it is not assignable to TypeScript's `object` type.
           return new EmbedNode(allegedItem as E);
         } else {
           throw new Error(`Invalid item in serialized state: ${allegedItem}`);

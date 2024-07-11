@@ -517,7 +517,7 @@ describe("SparseString", () => {
     assert.deepStrictEqual(arr.serialize(), []);
 
     arr.set(5, "cd");
-    assert.deepStrictEqual(arr.serialize(), ["", 5, "cd"]);
+    assert.deepStrictEqual(arr.serialize(), [5, "cd"]);
 
     arr.delete(0, 10);
     assert.deepStrictEqual(arr.serialize(), []);
@@ -636,13 +636,14 @@ describe("SparseString", () => {
       assert.throws(() => SparseString.deserialize(["abc", 7, "xy", bad, "m"]));
     }
 
+    // Note: objects including arrays are okay (no error) because they become embeds.
     assert.throws(() =>
       // @ts-expect-error
-      SparseString.deserialize(["abc", 7, ["x", "y", "z"], 3, "m"])
+      SparseString.deserialize(["abc", 7, undefined, 3, "m"])
     );
     assert.throws(() =>
       // @ts-expect-error
-      SparseString.deserialize([["x", "y", "z"], 7, "abc", 3, "m"])
+      SparseString.deserialize([Symbol(), 7, "abc", 3, "m"])
     );
     assert.throws(() =>
       // @ts-expect-error
@@ -650,14 +651,20 @@ describe("SparseString", () => {
     );
     assert.throws(() =>
       // @ts-expect-error
-      SparseString.deserialize(["abc", 7, {}, 3, "m"])
+      SparseString.deserialize(["abc", 7, () => {}, 3, "m"])
     );
 
     assert.doesNotThrow(() => SparseString.deserialize(["abc", 7, 6, 3, "m"]));
-    assert.doesNotThrow(() => SparseString.deserialize(["abc", 7, "x", "y", "m"]));
-    assert.doesNotThrow(() => SparseString.deserialize([3, "abc", 7, "xy", "m"]));
+    assert.doesNotThrow(() =>
+      SparseString.deserialize(["abc", 7, "x", "y", "m"])
+    );
+    assert.doesNotThrow(() =>
+      SparseString.deserialize([3, "abc", 7, "xy", "m"])
+    );
     assert.doesNotThrow(() => SparseString.deserialize(["abc", 7, "", 3, "m"]));
-    assert.doesNotThrow(() => SparseString.deserialize(["abc", 0, "xy", 3, "m"]));
+    assert.doesNotThrow(() =>
+      SparseString.deserialize(["abc", 0, "xy", 3, "m"])
+    );
 
     assert.doesNotThrow(() => SparseString.deserialize([]));
     assert.doesNotThrow(() => SparseString.deserialize(["", 7, "x"]));
