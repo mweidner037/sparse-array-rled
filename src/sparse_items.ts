@@ -450,9 +450,13 @@ export abstract class SparseItems<I> {
     const afterRight = beforeRight.next;
 
     beforeLeft.next = null;
-    const nodeEnd = append(beforeLeft, node);
-    if (afterRight === null) nodeEnd.next = null;
-    else append(nodeEnd, afterRight);
+    const appendedNode = append(beforeLeft, node);
+    if (afterRight === null) appendedNode.next = null;
+    else {
+      // Append while preserving afterRight.next.
+      const appendedAfterRight = append(appendedNode, afterRight);
+      appendedAfterRight.next = afterRight.next;
+    }
 
     // Return the replaced list.
     beforeRight.next = null;
