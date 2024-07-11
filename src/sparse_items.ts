@@ -254,7 +254,7 @@ export abstract class SparseItems<I> {
 
     let countRemaining = count;
     for (
-      let current: Node<I> | null = this.next;
+      let current: Node<I> | null = node;
       current !== null;
       current = current.next
     ) {
@@ -418,27 +418,44 @@ export abstract class SparseItems<I> {
 
     if (node.length === 0) return this.construct(null);
 
+    /*
+      We locate the left and right boundaries of node, extending the list and
+      splitting existing nodes as necessary so that both occur at the boundaries
+      of existing nodes:
+      
+                     -->               node                -->
+      --> beforeLeft --> afterLeft --> ... --> beforeRight --> afterRight -->
+                      ^                                     ^
+                      left                                  right
+      
+      To perform the overwrite, we splice in node, also remembering the replaced
+      list `afterLeft --> ... --> beforeRight --> null`.
+     */
+
     if (this.next === null) {
       this.next = new DeletedNode(index + node.length);
     }
     // Cast needed due to https://github.com/microsoft/TypeScript/issues/9974
-    const left = (index === 0 ? this : createSplit(this.next, index)) as {
+    const beforeLeft = (index === 0 ? this : createSplit(this.next, index)) as {
       next: Node<I> | null;
     };
 
-    if (left.next === null) {
-      left.next = new DeletedNode(node.length);
+    if (beforeLeft.next === null) {
+      beforeLeft.next = new DeletedNode(node.length);
     }
-    const preRight = createSplit(left.next, node.length);
+    const afterLeft = beforeLeft.next;
 
-    const replacedStart = left.next;
-    left.next = node;
-    node.next = preRight.next;
-    preRight.next = null;
+    const beforeRight = createSplit(beforeLeft.next, node.length);
+    const afterRight = beforeRight.next;
 
-    const replaced = this.construct(null);
-    replaced.next = replacedStart;
-    return replaced;
+    beforeLeft.next = null;
+    const nodeEnd = append(beforeLeft, node);
+    if (afterRight === null) nodeEnd.next = null;
+    else append(nodeEnd, afterRight);
+
+    // Return the replaced list.
+    beforeRight.next = null;
+    return this.construct(afterLeft);
   }
 }
 
