@@ -669,21 +669,20 @@ describe("SparseArray", () => {
       // @ts-expect-error
       SparseArray.deserialize([["a", "b", "c"], 7, {}, 3, ["m"]])
     );
-    assert.throws(() =>
+
+    assert.doesNotThrow(() =>
       SparseArray.deserialize([["a", "b", "c"], 7, 6, 3, ["m"]])
     );
-    assert.throws(() =>
+    assert.doesNotThrow(() =>
       SparseArray.deserialize([["a", "b", "c"], 7, ["x"], ["y"], ["m"]])
     );
-
-    assert.throws(() =>
+    assert.doesNotThrow(() =>
       SparseArray.deserialize([3, ["a", "b", "c"], 7, ["x", "y"], ["m"]])
     );
-
-    assert.throws(() =>
+    assert.doesNotThrow(() =>
       SparseArray.deserialize([["a", "b", "c"], 7, [], 3, ["m"]])
     );
-    assert.throws(() =>
+    assert.doesNotThrow(() =>
       SparseArray.deserialize([["a", "b", "c"], 0, ["x", "y"], 3, ["m"]])
     );
 

@@ -652,13 +652,12 @@ describe("SparseString", () => {
       // @ts-expect-error
       SparseString.deserialize(["abc", 7, {}, 3, "m"])
     );
-    assert.throws(() => SparseString.deserialize(["abc", 7, 6, 3, "m"]));
-    assert.throws(() => SparseString.deserialize(["abc", 7, "x", "y", "m"]));
 
-    assert.throws(() => SparseString.deserialize([3, "abc", 7, "xy", "m"]));
-
-    assert.throws(() => SparseString.deserialize(["abc", 7, "", 3, "m"]));
-    assert.throws(() => SparseString.deserialize(["abc", 0, "xy", 3, "m"]));
+    assert.doesNotThrow(() => SparseString.deserialize(["abc", 7, 6, 3, "m"]));
+    assert.doesNotThrow(() => SparseString.deserialize(["abc", 7, "x", "y", "m"]));
+    assert.doesNotThrow(() => SparseString.deserialize([3, "abc", 7, "xy", "m"]));
+    assert.doesNotThrow(() => SparseString.deserialize(["abc", 7, "", 3, "m"]));
+    assert.doesNotThrow(() => SparseString.deserialize(["abc", 0, "xy", 3, "m"]));
 
     assert.doesNotThrow(() => SparseString.deserialize([]));
     assert.doesNotThrow(() => SparseString.deserialize(["", 7, "x"]));

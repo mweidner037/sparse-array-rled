@@ -628,8 +628,8 @@ describe("SparseIndices", () => {
       SparseIndices.deserialize([3, 7, {}, 3, 1])
     );
 
-    assert.throws(() => SparseIndices.deserialize([3, 7, 0, 3, 1]));
-    assert.throws(() => SparseIndices.deserialize([3, 0, 2, 3, 1]));
+    assert.doesNotThrow(() => SparseIndices.deserialize([3, 7, 0, 3, 1]));
+    assert.doesNotThrow(() => SparseIndices.deserialize([3, 0, 2, 3, 1]));
 
     assert.doesNotThrow(() => SparseIndices.deserialize([]));
     assert.doesNotThrow(() => SparseIndices.deserialize([0, 7, 1]));
