@@ -505,7 +505,7 @@ function locate<I>(
  * Connects before to after in the list, merging if possible.
  * Returns the final node, whose next pointer is *not* updated.
  */
-function append<I>(before: { next: Node<I> | null }, after: Node<I>): Node<I> {
+export function append<I>(before: { next: Node<I> | null }, after: Node<I>): Node<I> {
   if (before instanceof PresentNode && after instanceof PresentNode) {
     const success = before.tryMergeContent(after);
     if (success) return before;

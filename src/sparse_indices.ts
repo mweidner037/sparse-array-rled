@@ -1,8 +1,9 @@
 import {
   SparseItems,
-  deserializeItems,
   PresentNode,
   Node,
+  DeletedNode,
+  append,
 } from "./sparse_items";
 
 // TODO: needs to use different serialize/deserialize.
@@ -68,17 +69,37 @@ export class SparseIndices extends SparseItems<number> {
    * @throws If the serialized form is invalid (see `SparseIndices.serialize`).
    */
   static deserialize(serialized: SerializedSparseIndices): SparseIndices {
-    // TODO: needs to be special b/c deleted-start rule
-    return new SparseIndices(
-      deserializeItems(serialized, (allegedItem) => {
-        if (
-          !(Number.isSafeInteger(allegedItem) && (allegedItem as number) >= 0)
-        ) {
-          throw new Error(`Invalid item in serialized state: ${allegedItem}`);
-        }
-        return new NumberNode(allegedItem as number);
-      })
-    );
+    // We can't use deserializeItems because we distinguish present vs deleted nodes
+    // by index parity, not by type.
+
+    // To make constructing custom saved states easier, we tolerate
+    // 0-length items and trailing deleted items.
+
+    const startHolder: { next: Node<number> | null } = { next: null };
+    let previous = startHolder;
+    for (let i = 0; i < serialized.length; i++) {
+      const maybeItem = serialized[i];
+      if (!Number.isSafeInteger(maybeItem) || maybeItem < 0) {
+        throw new Error(
+          `Invalid ${
+            i % 2 === 0 ? "present" : "delete"
+          } count at serialized[${i}]: ${maybeItem}`
+        );
+      }
+      if (maybeItem === 0) continue;
+
+      let node: Node<number>;
+      if (i % 2 === 1) {
+        // Deleted node.
+        node = new DeletedNode(maybeItem);
+      } else {
+        // Present node.
+        node = new NumberNode(maybeItem);
+      }
+      previous = append(previous, node);
+    }
+
+    return new SparseIndices(startHolder.next);
   }
 
   // TODO. Do we even need this method?
@@ -121,7 +142,19 @@ export class SparseIndices extends SparseItems<number> {
    * See SerializedSparseIndices for a description of the format.
    */
   serialize(): SerializedSparseIndices {
-    return super.serialize();
+    // Because both present and deleted nodes serialize to numbers, we
+    // distinguish them by parity: present at even index, deleted at odd index.
+    // In particular, we always start with a present element, even if it's 0.
+    const savedState: number[] = [];
+    let previousEndIndex = 0;
+    for (const [index, length] of this.items()) {
+      if (savedState.length === 0) {
+        if (index === 0) savedState.push(length);
+        else savedState.push(0, index, length);
+      } else savedState.push(index - previousEndIndex, length);
+      previousEndIndex = index + length;
+    }
+    return savedState;
   }
 
   newSlicer(): IndicesSlicer {
