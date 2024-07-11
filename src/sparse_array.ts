@@ -87,7 +87,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
         if (!Array.isArray(allegedItem)) {
           throw new Error(`Invalid item in serialized state: ${allegedItem}`);
         }
-        return new ArrayNode<T>(allegedItem as T[]);
+        return new ArrayNode<T>((allegedItem as T[]).slice());
       })
     );
   }
