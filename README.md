@@ -190,4 +190,4 @@ Results:
 | PlainArray     | 89.3 +- 1.1     | 2.02                     |
 | PlainArray2    | 60.7 +- 2.8     | 1.90                     |
 
-For additional microbenchmarks, see [benchmark_results.md](./benchmark_results.md), which reports the time to perform 1,000,000 operations of various types (implemented in [benchmarks/traces.ts](./benchmarks/traces.ts)).
+For additional microbenchmarks, see [benchmark_results.txt](./benchmark_results.txt), which reports the time to perform 1,000,000 operations of various types (implemented in [benchmarks/traces.ts](./benchmarks/traces.ts)).
