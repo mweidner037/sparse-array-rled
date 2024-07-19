@@ -436,6 +436,13 @@ export abstract class SparseItems<I> {
     if (this.next === null) {
       this.next = new DeletedNode(index + node.length);
     }
+
+    if (this.next.next === null && this.next.length === index) {
+      // Common case opt: Appending to non-sparse array (single node).
+      if (node instanceof PresentNode) append(this.next, node);
+      return this.construct(null);
+    }
+
     // Cast needed due to https://github.com/microsoft/TypeScript/issues/9974
     const beforeLeft = (index === 0 ? this : createSplit(this.next, index)) as {
       next: Node<I> | null;
