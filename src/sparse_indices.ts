@@ -102,40 +102,6 @@ export class SparseIndices extends SparseItems<number> {
     return new SparseIndices(startHolder.next);
   }
 
-  // TODO. Do we even need this method?
-  // If re-added, uncomment tests.
-  // /**
-  //  * Returns a new SparseIndices with the given keys (indices).
-  //  *
-  //  * The keys must be in order by index.
-  //  *
-  //  * @see SparseIndices.keys
-  //  */
-  // static fromKeys(keys: Iterable<number>): SparseIndices {
-  //   const pairs: Pair<number>[] = [];
-  //   let curLength = 0;
-
-  //   for (const index of keys) {
-  //     if (index < curLength) {
-  //       throw new Error(
-  //         `Out-of-order index in entries: ${index}, previous was ${
-  //           curLength - 1
-  //         }`
-  //       );
-  //     }
-
-  //     if (index === curLength && pairs.length !== 0) {
-  //       pairs[pairs.length - 1].item++;
-  //     } else {
-  //       checkIndex(index);
-  //       pairs.push({ index, item: 1 });
-  //     }
-  //     curLength = index + 1;
-  //   }
-
-  //   return new SparseIndices(pairs);
-  // }
-
   /**
    * Returns a compact JSON representation of our state.
    *

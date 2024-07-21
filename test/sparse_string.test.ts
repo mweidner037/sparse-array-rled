@@ -277,10 +277,6 @@ class Checker<E extends object | never = never> {
     assert.strictEqual(nextEntry, entries.length);
     assert.strictEqual(nextEntry, keys.length);
 
-    // // Test fromEntries.
-    // const arr2 = SparseString.fromEntries(entries);
-    // check(arr2, this.values);
-
     // Test items.
     const items = [...this.arr.items()];
     let prevEnd = -1;
@@ -825,44 +821,6 @@ describe("SparseString", () => {
       assert.deepStrictEqual(arr.serialize(), initial);
     }
   });
-
-  // test("fromEntries errors", () => {
-  //   for (const bad of [-1, 0.5, NaN]) {
-  //     assert.throws(() => SparseString.fromEntries([[bad, "x"]]));
-  //     assert.throws(() =>
-  //       SparseString.fromEntries([
-  //         [0, "y"],
-  //         [bad, "x"],
-  //       ])
-  //     );
-  //   }
-
-  //   assert.throws(() =>
-  //     SparseString.fromEntries([
-  //       [0, "x"],
-  //       [1, "y"],
-  //       [1, "z"],
-  //     ])
-  //   );
-
-  //   assert.throws(() =>
-  //     SparseString.fromEntries([
-  //       [0, "x"],
-  //       [2, "y"],
-  //       [1, "z"],
-  //     ])
-  //   );
-
-  //   assert.doesNotThrow(() => SparseString.fromEntries([]));
-  //   assert.doesNotThrow(() => SparseString.fromEntries([[1, "x"]]));
-  //   assert.doesNotThrow(() =>
-  //     SparseString.fromEntries([
-  //       [1, "x"],
-  //       [7, "y"],
-  //       [1000, "z"],
-  //     ])
-  //   );
-  // });
 
   test("deserialize errors", () => {
     for (const bad of [-1, 0.5, NaN]) {

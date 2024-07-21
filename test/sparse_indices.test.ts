@@ -207,10 +207,6 @@ class Checker {
     }
     assert.strictEqual(nextEntry, keys.length);
 
-    // // Test fromKeys.
-    // const arr2 = SparseIndices.fromKeys(keys);
-    // check(arr2, this.values);
-
     // Test items.
     const items = [...this.arr.items()];
     let prevEnd = -1;
@@ -581,21 +577,6 @@ describe("SparseIndices", () => {
       assert.deepStrictEqual(arr.serialize(), initial);
     }
   });
-
-  // test("fromKeys errors", () => {
-  //   for (const bad of [-1, 0.5, NaN]) {
-  //     assert.throws(() => SparseIndices.fromKeys([bad]));
-  //     assert.throws(() => SparseIndices.fromKeys([0, bad]));
-  //   }
-
-  //   assert.throws(() => SparseIndices.fromKeys([0, 1, 1]));
-
-  //   assert.throws(() => SparseIndices.fromKeys([0, 2, 1]));
-
-  //   assert.doesNotThrow(() => SparseIndices.fromKeys([]));
-  //   assert.doesNotThrow(() => SparseIndices.fromKeys([1]));
-  //   assert.doesNotThrow(() => SparseIndices.fromKeys([1, 7, 1000]));
-  // });
 
   test("deserialize errors", () => {
     for (const bad of [-1, 0.5, NaN]) {

@@ -58,7 +58,7 @@ export interface ArraySlicer<T> {
  * in principle, due to internal searches (similar to balanced-tree
  * collections).
  *
- * To construct a SparseArray, use the static `new`, `fromEntries`, or `deserialize` methods.
+ * To construct a SparseArray, use the static `new` or `deserialize` methods.
  *
  * @see SparseString For a memory-optimized array of chars.
  * @see SparseIndices To track a sparse array's present indices independent of its values.
@@ -92,43 +92,6 @@ export class SparseArray<T> extends SparseItems<T[]> {
     );
   }
 
-  // TODO. Do we even need this method?
-  // If re-added, uncomment tests.
-  // /**
-  //  * Returns a new SparseArray with the given entries.
-  //  *
-  //  * The entries must be in order by index.
-  //  *
-  //  * @see SparseArray.entries
-  //  */
-  // static fromEntries<T>(
-  //   entries: Iterable<[index: number, value: T]>
-  // ): SparseArray<T> {
-  //   const startHolder: {next: Node<T[]> | null} = {next: null};
-  //   let current: Node<I> | null = null;
-  //   let curLength = 0;
-
-  //   for (const [index, value] of entries) {
-  //     if (index < curLength) {
-  //       throw new Error(
-  //         `Out-of-order index in entries: ${index}, previous was ${
-  //           curLength - 1
-  //         }`
-  //       );
-  //     }
-
-  //     if (index === curLength && pairs.length !== 0) {
-  //       pairs[pairs.length - 1].item.push(value);
-  //     } else {
-  //       checkIndex(index);
-  //       pairs.push({ index, item: [value] });
-  //     }
-  //     curLength = index + 1;
-  //   }
-
-  //   return new SparseArray(pairs);
-  // }
-
   /**
    * Returns a compact JSON representation of our state.
    *
@@ -156,8 +119,6 @@ export class SparseArray<T> extends SparseItems<T[]> {
 
   /**
    * Iterates over the present [index, value] pairs, in order.
-   *
-   * @see SparseArray.fromEntries
    */
   *entries(): IterableIterator<[index: number, value: T]> {
     for (const [index, item] of this.items()) {

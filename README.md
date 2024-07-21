@@ -84,12 +84,11 @@ console.log(arr.length); // Prints 5
 Queries that only consider present values:
 
 ```ts
-const arr2 = SparseArray.fromEntries([
-  [0, "e"],
-  [1, "f"],
-  [5, "g"],
-  [6, "h"],
-]);
+const arr2 = SparseArray.new<string>();
+arr2.set(0, "e");
+arr2.set(1, "f");
+arr2.set(5, "g");
+arr2.set(6, "h");
 
 // Total present values.
 arr2.count(); // 4
@@ -141,12 +140,12 @@ The serialized form, `SerializedSparseArray<T>`, uses run-length encoded deletio
 For example:
 
 ```ts
-const arr4 = SparseArray.fromEntries([
-  [0, "foo"],
-  [1, "bar"],
-  [5, "X"],
-  [6, "yy"],
-]);
+const arr4 = SparseArray.new<string>();
+arr4.set(0, "foo");
+arr4.set(1, "bar");
+arr4.set(5, "X");
+arr4.set(6, "yy");
+
 console.log(arr4.serialize()); // Prints [['foo', 'bar'], 3, ['X', 'yy']]
 ```
 
