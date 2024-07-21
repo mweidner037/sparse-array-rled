@@ -77,7 +77,7 @@ export class SparseString<E extends object | never = never> extends SparseItems<
    * @throws If the serialized form is invalid (see `SparseString.serialize`).
    */
   static deserialize<E extends object | never = never>(
-    serialized: SerializedSparseString
+    serialized: SerializedSparseString<E>
   ): SparseString<E> {
     return new SparseString<E>(
       deserializeItems<string | E>(serialized, (allegedItem) => {
@@ -169,6 +169,17 @@ export class SparseString<E extends object | never = never> extends SparseItems<
   }
 
   /**
+   * Iterates over the present items, in order.
+   *
+   * Each item [index, values] indicates either a run of present chars or a single embed,
+   * starting at index and ending at either a deleted value or a value of the opposite type
+   * (char vs embed).
+   */
+  items(): IterableIterator<[index: number, values: string | E]> {
+    return super.items();
+  }
+
+  /**
    * Sets chars starting at index.
    *
    * That is, sets all values in the range [index, index + chars.length) to the
@@ -224,6 +235,9 @@ class StringNode extends PresentNode<string> {
 class EmbedNode<E extends object | never> extends PresentNode<E> {
   constructor(public item: E) {
     super();
+    if (!(typeof item === "object" && item !== null)) {
+      throw new Error(`Embeds must be objects; received ${item}`);
+    }
   }
 
   get length(): number {
