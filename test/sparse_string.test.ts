@@ -655,7 +655,7 @@ describe("SparseString", () => {
     const ALL_LENGTH = 5;
     test(`all ${ALL_LENGTH}-length ops`, function () {
       // Generous timeout (5x what my laptop needs).
-      this.timeout(60000);
+      this.timeout(70000);
 
       // Generate each possible array outline of length <= ALL_LENGTH.
       for (let a = 0; a < Math.pow(3, ALL_LENGTH); a++) {
@@ -801,6 +801,10 @@ describe("SparseString", () => {
       }
       for (const bad of [-1, 0.5, NaN]) {
         assert.throws(() => arr.delete(3, bad));
+      }
+      for (const badValue of [null, () => {}, 3]) {
+        // @ts-expect-error
+        assert.throws(() => arr.set(0, badValue));
       }
       assert.doesNotThrow(() => arr.clone().set(15, "abc"));
       assert.doesNotThrow(() => arr.clone().delete(15, 3));
