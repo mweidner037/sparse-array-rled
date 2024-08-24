@@ -6,14 +6,17 @@ import {
 } from "./sparse_items";
 
 /**
- * Serialized form of a SparseString.
+ * Serialized form of a `SparseString<E>`.
  *
  * The serialized form uses a compact JSON representation with run-length encoded deletions. It consists of:
  * - strings of concatenated present chars,
- * - embedded objects of type E, and
+ * - embedded objects of type `E`, and
  * - numbers, representing that number of deleted chars.
  *
  * For example, the sparse string `["a", "b", , , , "f", "g"]` serializes to `["ab", 3, "fg"]`.
+ *
+ * As an example with an embed, the sparse string `["h", "i", " ", { type: "image", ... }, "!"]`
+ * serializes to `["hi ", { type: "image", ... }, "!"]`.
  *
  * Trivial entries (empty strings, 0s, & trailing deletions) are always omitted.
  * For example, the sparse string `[, , "x", "y"]` serializes to `[2, "xy"]`.
@@ -25,7 +28,7 @@ export type SerializedSparseString<E extends object | never = never> = (
 )[];
 
 /**
- * Iterator-like object returned by SparseText.newSlicer().
+ * Iterator-like object returned by SparseString.newSlicer().
  *
  * Call nextSlice repeatedly to enumerate the slices in order.
  */
@@ -34,16 +37,18 @@ export interface StringSlicer<E extends object | never = never> {
    * Returns an array of items in the next slice,
    * continuing from the previous index (inclusive) to endIndex (exclusive).
    *
-   * Each item [index, chars] indicates a run of present chars starting at index
-   * (concatenated into a single string),
-   * ending at either endIndex or a deleted index.
+   * Each item [index, charsOrEmbed] indicates either a run of present chars or a single embed,
+   * starting at index and ending at either endIndex, a deleted value, or a value of the opposite type
+   * (char vs embed).
    *
    * The first call starts at index 0. To end at the end of the array,
    * set `endIndex = null`.
    *
    * @throws If endIndex is less than the previous index.
    */
-  nextSlice(endIndex: number | null): Array<[index: number, chars: string | E]>;
+  nextSlice(
+    endIndex: number | null
+  ): Array<[index: number, charsOrEmbed: string | E]>;
 }
 
 /**
@@ -55,7 +60,15 @@ export interface StringSlicer<E extends object | never = never> {
  * This typically uses 2x less memory and results in smaller JSON,
  * though with a slight cost in mutation speed.
  *
+ * The sparse string may also contain embedded objects of type `E`.
+ * Each embed takes the place of a single character. You can use embeds to represent
+ * non-text content, like images and videos, that may appear inside a text document.
+ * If you do not specify the generic type `E`, it defaults to `never`, i.e., no embeds are allowed.
+ *
  * @see SparseIndices To track a sparse array's present indices independent of its values.
+ * @typeParam E - The type of embeds, or `never` (no embeds allowed) if not specified.
+ * Embeds must be non-null objects. (Although TypeScript's `object` allows null, this implementation
+ * does not.)
  */
 export class SparseString<E extends object | never = never> extends SparseItems<
   string | E
@@ -74,6 +87,8 @@ export class SparseString<E extends object | never = never> extends SparseItems<
    * from `SparseString.serialize`.
    *
    * @throws If the serialized form is invalid (see `SparseString.serialize`).
+   * Note that an error is *not* thrown if the serialized form contains embeds
+   * not matching type `E`, since generic types are erased during compilation.
    */
   static deserialize<E extends object | never = never>(
     serialized: SerializedSparseString<E>
@@ -102,7 +117,7 @@ export class SparseString<E extends object | never = never> extends SparseItems<
   }
 
   /**
-   * Returns the char at index, or undefined if not present.
+   * Returns the char (or embed) at index, or undefined if not present.
    *
    * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
@@ -119,9 +134,9 @@ export class SparseString<E extends object | never = never> extends SparseItems<
   }
 
   /**
-   * Iterates over the present [index, char] pairs, in order.
+   * Iterates over the present [index, char (or embed)] pairs, in order.
    */
-  *entries(): IterableIterator<[index: number, char: string | E]> {
+  *entries(): IterableIterator<[index: number, charOrEmbed: string | E]> {
     for (const [index, item] of this.items()) {
       if (typeof item === "string") {
         for (let j = 0; j < item.length; j++) {
@@ -134,11 +149,11 @@ export class SparseString<E extends object | never = never> extends SparseItems<
   /**
    * Iterates over the present items, in order.
    *
-   * Each item [index, values] indicates either a run of present chars or a single embed,
+   * Each item [index, charsOrEmbed] indicates either a run of present chars or a single embed,
    * starting at index and ending at either a deleted value or a value of the opposite type
    * (char vs embed).
    */
-  items(): IterableIterator<[index: number, values: string | E]> {
+  items(): IterableIterator<[index: number, charsOrEmbed: string | E]> {
     return super.items();
   }
 
@@ -152,9 +167,15 @@ export class SparseString<E extends object | never = never> extends SparseItems<
    * Index 0 in the returned string corresponds to `index` in this string.
    */
   set(index: number, chars: string): SparseString<E>;
-  set(index: number, value: E): SparseString<E>;
-  set(index: number, values: string | E) {
-    return this._set(index, values);
+  /**
+   * Sets the value at index to the given embed.
+   *
+   * @returns A sparse string of the previous value.
+   * Index 0 in the returned string corresponds to `index` in this string.
+   */
+  set(index: number, embed: E): SparseString<E>;
+  set(index: number, item: string | E) {
+    return this._set(index, item);
   }
 
   protected construct(start: Node<string> | null): this {
@@ -216,7 +237,7 @@ class EmbedNode<E extends object | never> extends PresentNode<E> {
   }
 
   sliceItem(): E {
-    // We don't deep-clone values, only their wrapper items.
+    // We don't deep-clone embeds, only their wrapper items.
     return this.item;
   }
 }

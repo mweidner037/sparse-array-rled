@@ -29,7 +29,7 @@ For special cases, `SparseString` and `SparseIndices` implement the same functio
   but it uses strings (e.g. `"abc"`) instead of arrays (e.g. `["a", "b", "c"]`) in its internal state
   and serialized form.
   This typically uses less memory (2x in our benchmarks) and results in smaller JSON,
-  though with a slight cost in mutation speed.
+  though with a slight cost in mutation speed. `SparseString<E>` can also contain embedded objects of type `E` (e.g., an image in a text document), each taking the place of one char.
 - `SparseIndices` is functionally identical to a `SparseArray`, except that
   it only stores which indices are present, not their associated values.
   This typically uses much less memory (4x in our benchmarks) and results in much smaller JSON.
@@ -90,9 +90,6 @@ arr2.set(6, "h");
 
 // Total present values.
 arr2.count(); // 4
-
-// Present values within a given slice.
-arr2.countBetween(0, 4); // 2
 
 // Present values up to but excluding a given index, plus whether that index is present.
 arr2.countAt(4); // 2
