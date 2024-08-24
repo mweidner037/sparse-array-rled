@@ -34,8 +34,6 @@ For special cases, `SparseString` and `SparseIndices` implement the same functio
   it only stores which indices are present, not their associated values.
   This typically uses much less memory (4x in our benchmarks) and results in much smaller JSON.
 
-> **Disclaimer:** This library is still in alpha. I have unit & fuzz tested the core functionality, but not every edge case or utility function. <!-- TODO: remove -->
-
 ### Example Use Cases
 
 I use this package in collaborative situations, where individual users perform actions in order, but some of these actions may be deleted/undone/not-yet-received - causing sparsity.
@@ -134,8 +132,8 @@ console.log(previous.length); // Prints 2 (last present index + 1) - not necessa
 
 The serialized form, `SerializedSparseArray<T>`, uses run-length encoded deletions. Specifically, it is an array that alternates between:
 
-- arrays of present values (even indices), and
-- numbers (odd indices), representing that number of deleted values.
+- - arrays of present values, and
+- - numbers, representing that number of deleted values.
 
 For example:
 

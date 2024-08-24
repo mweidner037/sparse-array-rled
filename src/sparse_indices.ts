@@ -5,10 +5,6 @@ import {
   DeletedNode,
   append,
 } from "./sparse_items";
-
-// TODO: needs to use different serialize/deserialize.
-// TODO: update serialized form descriptions on other classes (no longer alternating or strict start).
-
 /**
  * Serialized form of a SparseIndices.
  *

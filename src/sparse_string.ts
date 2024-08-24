@@ -16,6 +16,7 @@ import {
  * For example, the sparse string `["a", "b", , , , "f", "g"]` serializes to `["ab", 3, "fg"]`.
  *
  * Trivial entries (empty strings, 0s, & trailing deletions) are always omitted.
+ * For example, the sparse string `[, , "x", "y"]` serializes to `[2, "xy"]`.
  */
 export type SerializedSparseString<E extends object | never = never> = (
   | string
@@ -56,8 +57,6 @@ export interface StringSlicer<E extends object | never = never> {
  *
  * @see SparseIndices To track a sparse array's present indices independent of its values.
  */
-// TODO: default to never, once we check all usages.
-// TODO: test that never does what you expect for consumers.
 export class SparseString<E extends object | never = never> extends SparseItems<
   string | E
 > {

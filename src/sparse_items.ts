@@ -1,7 +1,5 @@
 import { checkIndex } from "./util";
 
-// TODO: opt for simple overwrite (like prev Itemer.update method)? Check benchmarks.
-
 export abstract class PresentNode<I> {
   next: Node<I> | null = null;
   abstract item: I;
@@ -413,7 +411,6 @@ export abstract class SparseItems<I> {
   }
 
   // TODO: careful about aliasing
-  // TODO: check for no-deleted-ends in tests, incl after loading
   private overwrite(index: number, node: Node<I>): this {
     checkIndex(index);
 
