@@ -29,7 +29,7 @@ For special cases, `SparseString` and `SparseIndices` implement the same functio
   but it uses strings (e.g. `"abc"`) instead of arrays (e.g. `["a", "b", "c"]`) in its internal state
   and serialized form.
   This typically uses less memory (2x in our benchmarks) and results in smaller JSON,
-  though with a slight cost in mutation speed. `SparseString<E>` can also contain embedded objects of type `E` (e.g., an image in a text document), each taking the place of one char.
+  though with a slight cost in mutation speed. `SparseString<E>` can also contain embedded objects of type `E` (e.g., an image inline in a text document), each taking the place of one char.
 - `SparseIndices` is functionally identical to a `SparseArray`, except that
   it only stores which indices are present, not their associated values.
   This typically uses much less memory (4x in our benchmarks) and results in much smaller JSON.

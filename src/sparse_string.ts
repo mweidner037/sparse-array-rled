@@ -61,7 +61,7 @@ export interface StringSlicer<E extends object | never = never> {
  *
  * The sparse string may also contain embedded objects of type `E`.
  * Each embed takes the place of a single character. You can use embeds to represent
- * non-text content, like images and videos, that may appear inside a text document.
+ * non-text content, like images and videos, that may appear inline in a text document.
  * If you do not specify the generic type `E`, it defaults to `never`, i.e., no embeds are allowed.
  *
  * @see SparseIndices To track a sparse array's present indices independent of its values.
@@ -85,8 +85,7 @@ export class SparseString<E extends object | never = never> extends SparseItems<
    * from `SparseString.serialize`.
    *
    * @throws If the serialized form is invalid (see `SparseString.serialize`).
-   * Note that we do **not** check whether it contains embeds that fail to
-   * match type `E`.
+   * Note that we do **not** check whether the embeds match type `E`.
    */
   static deserialize<E extends object | never = never>(
     serialized: SerializedSparseString<E>

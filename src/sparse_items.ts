@@ -117,8 +117,7 @@ export abstract class SparseItems<I> {
    * All methods accept index arguments `>= this.length`, acting as if
    * the array ends with infinitely many deleted indices (empty slots).
    *
-   * Note: Unlike an ordinary `Array`, you cannot explicitly set the length
-   * to include additional deleted indices.
+   * Note: Unlike an ordinary `Array`, you cannot explicitly set the length.
    */
   get length(): number {
     if (this.next === null) return 0;
@@ -485,7 +484,7 @@ function createSplit<I>(start: Node<I>, delta: number): Node<I> {
  * Given delta > 0, returns the node containing that index and the offset within it.
  * The returned offset satisfies 0 < offset <= node.length, unless delta is outside
  * the list, in which case offset is greater and outside is true.
- * 
+ *
  * If delta is 0, returns [start, 0, false].
  */
 function locate<I>(

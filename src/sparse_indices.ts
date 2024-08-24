@@ -137,7 +137,7 @@ export class SparseIndices extends SparseItems<number> {
   /**
    * Sets values to be present, starting at index.
    *
-   * That is, sets all values in the range [index, index + values.length) to be present.
+   * That is, sets all values in the range [index, index + count) to be present.
    *
    * @returns A SparseIndices describing the previous values' presence.
    * Index 0 in the returned array corresponds to `index` in this array.
