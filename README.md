@@ -174,10 +174,10 @@ Results:
 
 | Implementation | Total time (ms) | Ending memory usage (MB) |
 | -------------- | --------------- | ------------------------ |
-| SparseArray    | 59.3 +- 5.4     | 1.98                     |
-| SparseString   | 67.5 +- 9.5     | 1.13                     |
-| SparseIndices  | 53.2 +- 1.5     | 0.48                     |
-| PlainArray     | 89.3 +- 1.1     | 2.02                     |
-| PlainArray2    | 60.7 +- 2.8     | 1.90                     |
+| SparseArray    | 81.2 +- 9.0     | 1.91                     |
+| SparseString   | 80.9 +- 5.8     | 1.10                     |
+| SparseIndices  | 63.3 +- 7.5     | 0.47                     |
+| PlainArray     | 76.7 +- 10.5    | 2.02                     |
+| PlainArray2    | 51.8 +- 6.9     | 1.90                     |
 
 For additional microbenchmarks, see [benchmark_results.txt](./benchmark_results.txt), which reports the time to perform 1,000,000 operations of various types (implemented in [benchmarks/traces.ts](./benchmarks/traces.ts)).

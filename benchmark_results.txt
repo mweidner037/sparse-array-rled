@@ -1,30 +1,30 @@
-SparseArray         append              56.2 +- 6.8 ms
-SparseString        append              101.1 +- 5.3 ms
-SparseIndices       append              50.0 +- 4.4 ms
-PlainArray          append              184.1 +- 1.0 ms
-PlainArray2         append              49.1 +- 4.0 ms
+SparseArray         append              58.9 +- 1.7 ms
+SparseString        append              104.5 +- 2.4 ms
+SparseIndices       append              52.8 +- 3.0 ms
+PlainArray          append              182.9 +- 9.8 ms
+PlainArray2         append              50.0 +- 6.1 ms
 
-SparseArray         backspace           177.3 +- 2.2 ms
-SparseString        backspace           166.1 +- 6.8 ms
-SparseIndices       backspace           138.2 +- 7.8 ms
-PlainArray          backspace           164.7 +- 9.0 ms
-PlainArray2         backspace           135.3 +- 8.9 ms
+SparseArray         backspace           177.2 +- 6.1 ms
+SparseString        backspace           166.1 +- 10.0 ms
+SparseIndices       backspace           141.4 +- 7.2 ms
+PlainArray          backspace           171.6 +- 2.7 ms
+PlainArray2         backspace           140.8 +- 6.8 ms
 
-SparseArray         randomDeletes       461.2 +- 4.1 ms
-SparseString        randomDeletes       458.7 +- 3.4 ms
-SparseIndices       randomDeletes       297.2 +- 8.3 ms
-PlainArray          randomDeletes       311.1 +- 2.6 ms
-PlainArray2         randomDeletes       280.6 +- 3.8 ms
+SparseArray         randomDeletes       450.4 +- 7.6 ms
+SparseString        randomDeletes       440.3 +- 6.3 ms
+SparseIndices       randomDeletes       277.5 +- 0.9 ms
+PlainArray          randomDeletes       321.4 +- 4.5 ms
+PlainArray2         randomDeletes       281.6 +- 2.0 ms
 
-SparseArray         frontAndBack        173.0 +- 5.3 ms
-SparseString        frontAndBack        195.4 +- 7.0 ms
-SparseIndices       frontAndBack        148.1 +- 4.5 ms
-PlainArray          frontAndBack        153.4 +- 8.0 ms
-PlainArray2         frontAndBack        87.7 +- 5.9 ms
+SparseArray         frontAndBack        169.6 +- 0.9 ms
+SparseString        frontAndBack        191.4 +- 6.8 ms
+SparseIndices       frontAndBack        143.9 +- 4.1 ms
+PlainArray          frontAndBack        154.7 +- 6.9 ms
+PlainArray2         frontAndBack        90.6 +- 6.1 ms
 
-SparseArray         textTrace           76.8 +- 7.7 ms
-SparseString        textTrace           76.2 +- 7.1 ms
-SparseIndices       textTrace           66.2 +- 1.3 ms
-PlainArray          textTrace           77.2 +- 1.7 ms
-PlainArray2         textTrace           52.7 +- 1.3 ms
+SparseArray         textTrace           81.2 +- 9.0 ms
+SparseString        textTrace           80.9 +- 5.8 ms
+SparseIndices       textTrace           63.3 +- 7.5 ms
+PlainArray          textTrace           76.7 +- 10.5 ms
+PlainArray2         textTrace           51.8 +- 6.9 ms
 
