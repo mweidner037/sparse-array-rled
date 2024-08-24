@@ -166,8 +166,9 @@ class ArrayNode<T> extends PresentNode<T[]> {
   }
 
   splitContent(index: number): PresentNode<T[]> {
-    const afterContent = this.item.splice(index);
-    return new ArrayNode(afterContent);
+    const after = new ArrayNode(this.item.slice(index));
+    this.item.length = index;
+    return after;
   }
 
   tryMergeContent(other: PresentNode<T[]>): boolean {
