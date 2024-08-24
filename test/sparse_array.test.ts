@@ -67,6 +67,8 @@ function check(arr: SparseArray<string>, values: (string | null)[]) {
   assert.strictEqual(arr.length, getPresentLength(state));
   assert.strictEqual(arr.length, getValuesLength(values));
 
+  assert.strictEqual(arr.isEmpty(), getValuesLength(values) === 0);
+
   // Queries should also work on indexes past the length.
   for (let i = 0; i < 10; i++) {
     assert.deepStrictEqual(arr.has(arr.length + i), false);
@@ -380,6 +382,28 @@ describe("SparseArray", () => {
     checker.set(0, "x");
     checker.set(2, "y", "z");
     checker.set(7, "A", "B", "C");
+  });
+
+  test("untrimmed", () => {
+    // Deliberately create arrays whose internal representation is untrimmed
+    // (ends with a deleted node) and check that length, isEmpty,
+    // and the serialized form are unaffected.
+    const checker = new Checker();
+
+    checker.set(0, ..."abcde");
+    checker.delete(0, 5);
+    checker.testQueries(rng);
+    assert.deepStrictEqual(checker.serialize()[0], []);
+
+    checker.set(0, ..."abcde");
+    checker.delete(3, 2);
+    checker.testQueries(rng);
+    assert.deepStrictEqual(checker.serialize()[0], [["a", "b", "c"]]);
+
+    checker.set(0, ..."abcde");
+    checker.delete(3, 5);
+    checker.testQueries(rng);
+    assert.deepStrictEqual(checker.serialize()[0], [["a", "b", "c"]]);
   });
 
   describe("fuzz", () => {

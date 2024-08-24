@@ -162,7 +162,7 @@ Iterators (`entries`, `keys`, `newSlicer`) are invalidated by concurrent mutatio
 
 ## Internals
 
-Internally, the state of a `SparseArray<T>` as stored as a singly-linked list of nodes, where each node represents either an array of present values or a number of deleted values. The nodes are normalized so that they are never empty and adjacent nodes always have different types. In other words, a `SparseArray<T>`'s internal state is a singly-linked list representation of its serialized state.
+Internally, the state of a `SparseArray<T>` as stored as a singly-linked list of nodes, where each node represents either an array of present values or a number of deleted values. The nodes are normalized so that they are never empty and adjacent nodes always have different types. In other words, a `SparseArray<T>`'s internal state is a singly-linked list representation of its serialized state. (Exception: The linked list may end with a deleted node, while the serialized state will not.)
 
 To reduce repetition and code size, most functionality for the three exported classes (`SparseArray`, `SparseString`, `SparseIndices`) is inherited from a common superclass, `SparseItems<I>`. It is a template class that defines mutations and queries in terms of items of type `I`, which are the content of present nodes: `T[]` for `SparseArray`, `string` for `SparseString`, `number` for `SparseIndices`.
 

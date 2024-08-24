@@ -92,6 +92,8 @@ function check<E extends object | never>(
   assert.strictEqual(arr.length, getPresentLength(state));
   assert.strictEqual(arr.length, getValuesLength(values));
 
+  assert.strictEqual(arr.isEmpty(), getValuesLength(values) === 0);
+
   // Queries should also work on indexes past the length.
   for (let i = 0; i < 10; i++) {
     assert.deepStrictEqual(arr.has(arr.length + i), false);
@@ -448,6 +450,35 @@ describe("SparseString", () => {
       if (i >= 20) checker.delete(i - 20, 1);
       if (i % 10 === 0) checker.testQueries(rng);
     }
+  });
+
+  test("untrimmed", () => {
+    // Deliberately create arrays whose internal representation is untrimmed
+    // (ends with a deleted node) and check that length, isEmpty,
+    // and the serialized form are unaffected.
+    const checker = new Checker<Embed>();
+
+    checker.set(0, ..."abcde");
+    checker.delete(0, 5);
+    checker.testQueries(rng);
+    assert.deepStrictEqual(checker.serialize()[0], []);
+
+    checker.set(0, ..."abcde");
+    checker.delete(3, 2);
+    checker.testQueries(rng);
+    assert.deepStrictEqual(checker.serialize()[0], ["abc"]);
+
+    checker.set(0, ..."abcde");
+    checker.delete(3, 5);
+    checker.testQueries(rng);
+    assert.deepStrictEqual(checker.serialize()[0], ["abc"]);
+
+    checker.setEmbed(5, { a: "foo" });
+    checker.setEmbed(6, { b: "bar" });
+    checker.delete(6, 1);
+    checker.delete(5, 1);
+    checker.testQueries(rng);
+    assert.deepStrictEqual(checker.serialize()[0], ["abc"]);
   });
 
   describe("fuzz", () => {

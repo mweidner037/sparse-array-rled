@@ -349,10 +349,9 @@ export abstract class SparseItems<I> {
   /**
    * Returns a compact JSON-serializable representation of our state.
    *
-   * TODO
-   * The return value uses a run-length encoding: it alternates between
-   * - present items (even indices), and
-   * - numbers (odd indices), representing that number of deleted values.
+   * It consists of items (indicating present values) and numbers
+   * (indicating deletions). It is normalized so that entries are
+   * always nontrivial and cannot be merged with their neighbors.
    */
   serialize(): (I | number)[] {
     if (this.next === null) return [];
@@ -410,7 +409,6 @@ export abstract class SparseItems<I> {
     return this.overwrite(index, this.newNode(item));
   }
 
-  // TODO: careful about aliasing
   private overwrite(index: number, node: Node<I>): this {
     checkIndex(index);
 
@@ -541,16 +539,12 @@ function split<I>(node: Node<I>, offset: number): void {
   }
 }
 
-// TODO: test that untrimmed cases are not externally visible (length, isEmpty, serialized).
-
 /**
- * Templated implementation of deserialization
+ * Templated implementation of deserialization.
  *
  * Each subclass implements a static `deserialize` method as
- * `return new <class>(deserializeItems(serialized, <class's itemer>))`.
- *
- * TODO: document number restriction. Might need a separate method for SparseIndices,
- * along with serialize().
+ * `return new <class>(deserializeItems(serialized, <class's itemer>))`,
+ * except for SparseIndices which uses a different serialized form.
  *
  * @param newNode Unlike internal newNode method, must validate and shallow-clone item.
  * If invalid, throw error. (It's user input.)
