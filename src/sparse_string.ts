@@ -56,8 +56,8 @@ export interface StringSlicer<E extends object | never = never> {
  * SparseString is functionally identical to a SparseArray with single-char values,
  * but it uses strings (e.g. `"abc"`) instead of arrays (e.g. `["a", "b", "c"]`) in its internal state
  * and serialized form.
- * This typically uses 2x less memory and results in smaller JSON,
- * though with a slight cost in mutation speed.
+ * This typically uses less memory (2x in our benchmarks) and results in smaller JSON,
+  though with a slight cost in mutation speed.
  *
  * The sparse string may also contain embedded objects of type `E`.
  * Each embed takes the place of a single character. You can use embeds to represent

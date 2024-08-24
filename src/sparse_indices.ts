@@ -47,7 +47,7 @@ export interface IndicesSlicer {
  *
  * SparseIndices is functionally identical to a SparseArray, except that
  * it only stores which indices are present, not their associated values.
- * This typically uses 4x less memory and results in smaller JSON.
+ * This typically uses much less memory (4x in our benchmarks) and results in much smaller JSON.
  */
 export class SparseIndices extends SparseItems<number> {
   // So list-positions can refer to unbound versions, we avoid using

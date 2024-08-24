@@ -19,9 +19,7 @@ However, it is additionally optimized for the following tasks:
 3.  Convert between a count `c` and the `c`-th present entry.
 
 For ordinary array tasks, `SparseArray` aims to have comparable
-memory usage and acceptable speed relative to an ordinary `Array`. However, indexed accesses are slower
-in principle, due to internal searches (similar to balanced-tree
-collections).
+memory usage and acceptable speed relative to an ordinary `Array`. However, indexed accesses are slower, due to internal searches.
 
 For special cases, `SparseString` and `SparseIndices` implement the same functionality with additional optimizations:
 
@@ -41,7 +39,7 @@ I use this package in collaborative situations, where individual users perform a
 <a id="collaborative-text-editing"></a>
 
 1. **Collaborative text/list editing:** Group sequential insertions by a single user into "bunches", which map a bunch ID to its sequence of values. Later, some values may be deleted, making the sequence sparse.
-   - This is how [list-positions](https://github.com/mweidner037/list-positions#readme) represents the state of a `List`: as a `Map<bunchID, SparseArray>`.
+   - This is how [list-positions](https://github.com/mweidner037/list-positions#readme) represents the state of a `List<T>`: as a `Map<bunchID, SparseArray<T>>`.
 2. **General collaboration or peer-to-peer networking:** Track which messages you've received from another user/peer using a `SparseIndices`. Typically, this will be a single number ("all messages 0 through n-1"), but dropped/reverted messages could make the indices sparse.
    - A `Map<peerID, SparseIndices>` generalizes vector clocks and provides a space-optimized alternative to dotted vector clocks, described [here](https://mattweidner.com/2023/09/26/crdt-survey-3.html#tracking-operations-vector-clocks-1).
 
@@ -91,7 +89,7 @@ arr2.set(6, "h");
 // Total present values.
 arr2.count(); // 4
 
-// Present values up to but excluding a given index, plus whether that index is present.
+// Present values up to but excluding a given index.
 arr2.countAt(4); // 2
 arr2.countAt(6); // 3
 
@@ -102,7 +100,7 @@ arr2.indexOfCount(5); // -1
 arr2.indexOfCount(1000); // -1
 ```
 
-Bulk mutations are specially optimized:
+Bulk mutations are specifically optimized:
 
 ```ts
 const arr3 = SparseArray.new<string>();
@@ -144,7 +142,7 @@ arr4.set(6, "yy");
 console.log(arr4.serialize()); // Prints [['foo', 'bar'], 3, ['X', 'yy']]
 ```
 
-Deserialize with `const arr3 = SparseArray.fromSerialized(serialized)`.
+Deserialize with `const arr3 = SparseArray.deserialize(serialized)`.
 
 `arr.toString()` returns the JSON-encoded serialized form.
 
@@ -162,9 +160,9 @@ Iterators (`entries`, `keys`, `newSlicer`) are invalidated by concurrent mutatio
 
 ## Internals
 
-Internally, the state of a `SparseArray<T>` as stored as a singly-linked list of nodes, where each node represents either an array of present values or a number of deleted indices. The nodes are normalized so that they are never empty and adjacent nodes always have different types. In other words, a `SparseArray<T>`'s internal state is a singly-linked list representation of its serialized state. (Exception: The linked list may end with a deleted node, while the serialized state will not.)
+Internally, the state of a `SparseArray<T>` is stored as a singly-linked list of nodes, where each node represents either an array of present values or a number of deleted indices. The nodes are normalized so that they are never empty and adjacent nodes cannot be merged any further. In other words, a `SparseArray<T>`'s internal state is a singly-linked list representation of its serialized state. (Exception: The linked list may end with a deleted node, while the serialized state will not.)
 
-To reduce repetition and code size, most functionality for the three exported classes (`SparseArray`, `SparseString`, `SparseIndices`) is inherited from a common superclass, `SparseItems<I>`. It is a template class that defines mutations and queries in terms of items of type `I`, which are the content of present nodes: `T[]` for `SparseArray`, `string` for `SparseString`, `number` for `SparseIndices`.
+To reduce repetition and code size, most functionality for the three exported classes (`SparseArray`, `SparseString`, `SparseIndices`) is inherited from a common superclass, `SparseItems<I>`. It is a template class that defines mutations and queries in terms of items of type `I`, which are the content of present nodes: `T[]` for `SparseArray`, `string | E` for `SparseString<E>`, `number` for `SparseIndices`.
 
 ## Performance
 
