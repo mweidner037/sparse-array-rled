@@ -132,8 +132,8 @@ console.log(previous.length); // Prints 2 (last present index + 1) - not necessa
 
 The serialized form, `SerializedSparseArray<T>`, uses run-length encoded deletions. Specifically, it is an array that alternates between:
 
-- - arrays of present values, and
-- - numbers, representing that number of deleted values.
+- arrays of present values, and
+- numbers, representing that number of deleted values.
 
 For example:
 
@@ -165,11 +165,9 @@ Iterators (`entries`, `keys`, `newSlicer`) are invalidated by concurrent mutatio
 
 ## Internals
 
-Internally, the state of a `SparseArray<T>` as stored as an `Array<{ index: number, values: T[] }>`, indicating that a run of present `values` starts at `index`. These pairs are in order by `index` and always have deleted values in between them.
+Internally, the state of a `SparseArray<T>` as stored as a singly-linked list of nodes, where each node represents either an array of present values or a number of deleted values. The nodes are normalized so that they are never empty and adjacent nodes always have different types. In other words, a `SparseArray<T>`'s internal state is a singly-linked list representation of its serialized state.
 
-When the state can be represented as an ordinary `Array` - i.e., it is not sparse except for holes at the end - it may be stored as such. This saves some memory in our text-editing benchmarks, which create many (~10k) small sparse arrays, a decent fraction of which are not sparse.
-
-To reduce repetition and code size, most functionality for the three exported classes (`SparseArray`, `SparseString`, `SparseIndices`) is inherited from a common superclass, `SparseItems<I>`. It is a template class that defines mutations and queries in terms of "items" of type `I`, which represent a run of present values: `T[]` for `SparseArray`, `string` for `SparseString`, `number` for `SparseIndices`.
+To reduce repetition and code size, most functionality for the three exported classes (`SparseArray`, `SparseString`, `SparseIndices`) is inherited from a common superclass, `SparseItems<I>`. It is a template class that defines mutations and queries in terms of items of type `I`, which are the content of present nodes: `T[]` for `SparseArray`, `string` for `SparseString`, `number` for `SparseIndices`.
 
 ## Performance
 
