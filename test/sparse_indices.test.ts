@@ -483,7 +483,6 @@ describe("SparseIndices", () => {
   });
 
   test("toString", () => {
-    // Test both normalItem and pairs cases.
     for (const start of [0, 5]) {
       const arr = SparseIndices.new();
       arr.set(start, 5);
@@ -495,10 +494,9 @@ describe("SparseIndices", () => {
   });
 
   test("clone", () => {
-    // Test both normalItem and pairs cases.
-    for (const start of [0, 5]) {
+    for (const start of [null, 0, 5]) {
       const arr = SparseIndices.new();
-      arr.set(start, 5);
+      if (start !== null) arr.set(start, 5);
       const cloned = arr.clone();
 
       const clonedSerialized = cloned.serialize();
@@ -541,7 +539,6 @@ describe("SparseIndices", () => {
   });
 
   test("method errors", () => {
-    // Test both normalItem and pairs cases.
     for (const start of [0, 5]) {
       const arr = SparseIndices.new();
       arr.set(start, 5);

@@ -500,7 +500,6 @@ describe("SparseArray", () => {
   });
 
   test("toString", () => {
-    // Test both normalItem and pairs cases.
     for (const start of [0, 5]) {
       const arr = SparseArray.new<string>();
       arr.set(start, "a", "b", "c", "d", "sigil");
@@ -512,10 +511,9 @@ describe("SparseArray", () => {
   });
 
   test("clone", () => {
-    // Test both normalItem and pairs cases.
-    for (const start of [0, 5]) {
+    for (const start of [null, 0, 5]) {
       const arr = SparseArray.new<string>();
-      arr.set(start, "a", "b", "c", "d", "sigil");
+      if (start !== null) arr.set(start, "a", "b", "c", "d", "sigil");
       const cloned = arr.clone();
 
       const clonedSerialized = cloned.serialize();
@@ -564,7 +562,6 @@ describe("SparseArray", () => {
   });
 
   test("method errors", () => {
-    // Test both normalItem and pairs cases.
     for (const start of [0, 5]) {
       const arr = SparseArray.new<string>();
       arr.set(start, "a", "b", "c", "d", "e");
