@@ -2,50 +2,50 @@ import { assert } from "chai";
 import { describe, test } from "mocha";
 import seedrandom from "seedrandom";
 import { SerializedSparseIndices, SparseIndices } from "../src";
-import { Pair } from "../src/sparse_items";
+import { DeletedNode, Node } from "../src/sparse_items";
+import { DEBUG } from "./util";
 
-const DEBUG = false;
-
-function getState(arr: SparseIndices): Pair<number>[] {
-  // @ts-expect-error Ignore protected
-  return arr.asPairs();
+function getState(arr: SparseIndices): Node<number>[] {
+  const nodes: Node<number>[] = [];
+  // @ts-expect-error Ignore private.
+  for (let current = arr.next; current !== null; current = current.next) {
+    nodes.push(current);
+  }
+  return nodes;
 }
 
-function validate(pairs: Pair<number>[]): void {
-  // No nonsense i's.
-  assert.doesNotHaveAnyKeys(pairs, ["-1", "-2", "-0"]);
-
-  // In order.
-  for (let i = 0; i < pairs.length - 1; i++) {
-    assert.isBelow(pairs[i].index, pairs[i + 1].index);
-  }
-
+function validate(nodes: Node<string>[]): void {
   // Proper types.
-  for (let i = 0; i < pairs.length; i++) {
-    assert(
-      Number.isSafeInteger(pairs[i].item),
-      `Not a safe integer: ${pairs[i].item}`
-    );
-    assert.isAtLeast(pairs[i].item, 0);
+  for (const node of nodes) {
+    if (node instanceof DeletedNode) {
+      assert.isNumber(node.length);
+    } else {
+      assert.isNumber(node.item);
+    }
   }
 
   // No empty items.
-  for (let i = 0; i < pairs.length; i++) {
-    assert.notStrictEqual(pairs[i].item, 0);
+  for (let i = 0; i < nodes.length; i++) {
+    assert.notStrictEqual(nodes[i].length, 0);
   }
 
-  // No overlapping or joinable segments.
-  for (let i = 0; i < pairs.length - 1; i++) {
-    const thisEnd = pairs[i].index + pairs[i].item;
-    const nextStart = pairs[i + 1].index;
-    assert.isBelow(thisEnd, nextStart);
+  // No joinable nodes.
+  for (let i = 0; i < nodes.length - 1; i++) {
+    assert.notStrictEqual(
+      nodes[i].constructor.name,
+      nodes[i + 1].constructor.name
+    );
   }
 }
 
-function getPresentLength(pairs: Pair<number>[]): number {
-  if (pairs.length === 0) return 0;
-  const lastPair = pairs.at(-1)!;
-  return lastPair.index + lastPair.item;
+function getPresentLength(nodes: Node<number>[]): number {
+  let length = 0;
+  for (const node of nodes) length += node.length;
+  // Handle untrimmed case.
+  if (nodes.length !== 0 && nodes[nodes.length - 1] instanceof DeletedNode) {
+    length -= nodes[nodes.length - 1].length;
+  }
+  return length;
 }
 
 function getValuesLength<T>(values: (T | null)[]): number {
@@ -66,6 +66,8 @@ function check(arr: SparseIndices, values: (string | null)[]) {
   assert.strictEqual(arr.length, getPresentLength(state));
   assert.strictEqual(arr.length, getValuesLength(values));
 
+  assert.strictEqual(arr.isEmpty(), getValuesLength(values) === 0);
+
   // Queries should also work on indexes past the length.
   for (let i = 0; i < 10; i++) {
     assert.deepStrictEqual(arr.has(arr.length + i), false);
@@ -75,7 +77,7 @@ function check(arr: SparseIndices, values: (string | null)[]) {
 function entriesAsItems(
   entries: Array<[index: number, char: string]>
 ): Array<[index: number, item: number]> {
-  const pairs: Pair<number>[] = [];
+  const pairs: { index: number; item: number }[] = [];
   let curLength = 0;
 
   for (const [index, char] of entries) {
@@ -190,7 +192,7 @@ class Checker {
   }
 
   /**
-   * Test all _getAtCount inputs and some newSlicer walks.
+   * Test all indexOfCount inputs and some newSlicer walks.
    *
    * More expensive (O(length^2) ops), so only call occasionally,
    * in "interesting" states.
@@ -207,10 +209,6 @@ class Checker {
     }
     assert.strictEqual(nextEntry, keys.length);
 
-    // Test fromKeys.
-    const arr2 = SparseIndices.fromKeys(keys);
-    check(arr2, this.values);
-
     // Test items.
     const items = [...this.arr.items()];
     let prevEnd = -1;
@@ -224,7 +222,7 @@ class Checker {
       prevEnd = index + values;
     }
 
-    // Test _getAtCount.
+    // Test indexOfCount.
     for (
       let startIndex = 0;
       startIndex < this.values.length + 2;
@@ -242,17 +240,9 @@ class Checker {
         }
         if (index >= this.values.length) {
           // count is too large - not found.
-          assert.deepStrictEqual(this.arr._getAtCount(count, startIndex), null);
           assert.strictEqual(this.arr.indexOfCount(count, startIndex), -1);
         } else {
           // Answer is index.
-          const actual = this.arr._getAtCount(count, startIndex);
-          assert.isNotNull(actual);
-          const [item, offset, actualIndex] = actual!;
-          assert.deepStrictEqual(
-            [true, actualIndex],
-            [this.values[index] !== null, index]
-          );
           assert.strictEqual(this.arr.indexOfCount(count, startIndex), index);
         }
       }
@@ -267,12 +257,6 @@ class Checker {
         countBetween(this.values, 0, i),
         i < this.values.length && this.values[i] !== null,
       ]);
-      for (let j = i; j < this.values.length + 2; j++) {
-        assert.strictEqual(
-          this.arr.countBetween(i, j),
-          countBetween(this.values, i, j)
-        );
-      }
     }
 
     // Test newSlicer 10x with random slices.
@@ -383,6 +367,28 @@ describe("SparseIndices", () => {
     }
   });
 
+  test("untrimmed", () => {
+    // Deliberately create arrays whose internal representation is untrimmed
+    // (ends with a deleted node) and check that length, isEmpty,
+    // and the serialized form are unaffected.
+    const checker = new Checker();
+
+    checker.set(0, ..."abcde");
+    checker.delete(0, 5);
+    checker.testQueries(rng);
+    assert.deepStrictEqual(checker.serialize()[0], []);
+
+    checker.set(0, ..."abcde");
+    checker.delete(3, 2);
+    checker.testQueries(rng);
+    assert.deepStrictEqual(checker.serialize()[0], [3]);
+
+    checker.set(0, ..."abcde");
+    checker.delete(3, 5);
+    checker.testQueries(rng);
+    assert.deepStrictEqual(checker.serialize()[0], [3]);
+  });
+
   describe("fuzz", () => {
     test("single char ops", () => {
       const checker = new Checker();
@@ -477,7 +483,6 @@ describe("SparseIndices", () => {
   });
 
   test("toString", () => {
-    // Test both normalItem and pairs cases.
     for (const start of [0, 5]) {
       const arr = SparseIndices.new();
       arr.set(start, 5);
@@ -489,10 +494,9 @@ describe("SparseIndices", () => {
   });
 
   test("clone", () => {
-    // Test both normalItem and pairs cases.
-    for (const start of [0, 5]) {
+    for (const start of [null, 0, 5]) {
       const arr = SparseIndices.new();
-      arr.set(start, 5);
+      if (start !== null) arr.set(start, 5);
       const cloned = arr.clone();
 
       const clonedSerialized = cloned.serialize();
@@ -535,7 +539,6 @@ describe("SparseIndices", () => {
   });
 
   test("method errors", () => {
-    // Test both normalItem and pairs cases.
     for (const start of [0, 5]) {
       const arr = SparseIndices.new();
       arr.set(start, 5);
@@ -543,17 +546,6 @@ describe("SparseIndices", () => {
 
       // Each error case should throw and not change the array.
       // Indices >= length should *not* throw errors.
-
-      // countBetween
-      for (const bad of [-1, 0.5, NaN]) {
-        assert.throws(() => arr.countBetween(bad, 3));
-      }
-      for (const bad of [-1, 0.5, NaN]) {
-        assert.throws(() => arr.countBetween(0, bad));
-      }
-      assert.throws(() => arr.countBetween(1, -3));
-      assert.doesNotThrow(() => arr.countBetween(15, 18));
-      assert.deepStrictEqual(arr.serialize(), initial);
 
       // countAt
       for (const bad of [-1, 0.5, NaN]) {
@@ -607,21 +599,6 @@ describe("SparseIndices", () => {
     }
   });
 
-  test("fromKeys errors", () => {
-    for (const bad of [-1, 0.5, NaN]) {
-      assert.throws(() => SparseIndices.fromKeys([bad]));
-      assert.throws(() => SparseIndices.fromKeys([0, bad]));
-    }
-
-    assert.throws(() => SparseIndices.fromKeys([0, 1, 1]));
-
-    assert.throws(() => SparseIndices.fromKeys([0, 2, 1]));
-
-    assert.doesNotThrow(() => SparseIndices.fromKeys([]));
-    assert.doesNotThrow(() => SparseIndices.fromKeys([1]));
-    assert.doesNotThrow(() => SparseIndices.fromKeys([1, 7, 1000]));
-  });
-
   test("deserialize errors", () => {
     for (const bad of [-1, 0.5, NaN]) {
       assert.throws(() => SparseIndices.deserialize([0, bad]));
@@ -653,8 +630,8 @@ describe("SparseIndices", () => {
       SparseIndices.deserialize([3, 7, {}, 3, 1])
     );
 
-    assert.throws(() => SparseIndices.deserialize([3, 7, 0, 3, 1]));
-    assert.throws(() => SparseIndices.deserialize([3, 0, 2, 3, 1]));
+    assert.doesNotThrow(() => SparseIndices.deserialize([3, 7, 0, 3, 1]));
+    assert.doesNotThrow(() => SparseIndices.deserialize([3, 0, 2, 3, 1]));
 
     assert.doesNotThrow(() => SparseIndices.deserialize([]));
     assert.doesNotThrow(() => SparseIndices.deserialize([0, 7, 1]));

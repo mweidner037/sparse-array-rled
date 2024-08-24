@@ -1,17 +1,22 @@
-import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
-import { checkIndex } from "./util";
+import {
+  SparseItems,
+  PresentNode,
+  Node,
+  DeletedNode,
+  append,
+} from "./sparse_items";
 
 /**
  * Serialized form of a SparseIndices.
  *
  * The serialized form uses a compact JSON representation with run-length encoding. It alternates between:
  * - counts of present values (even indices), and
- * - counts of deleted values (odd indices).
+ * - counts of deletions (odd indices).
  *
  * For example, the sparse array `[true, true, , , , true, true]` serializes to `[2, 3, 2]`.
  *
  * Trivial entries (0s & trailing deletions) are always omitted,
- * except that the 0th entry may be 0.
+ * except that the first entry may be 0.
  * For example, the sparse array `[, , true, true, true]` serializes to `[0, 2, 3]`.
  */
 export type SerializedSparseIndices = number[];
@@ -42,7 +47,7 @@ export interface IndicesSlicer {
  *
  * SparseIndices is functionally identical to a SparseArray, except that
  * it only stores which indices are present, not their associated values.
- * This typically uses 4x less memory and results in smaller JSON.
+ * This typically uses much less memory (4x in our benchmarks) and results in much smaller JSON.
  */
 export class SparseIndices extends SparseItems<number> {
   // So list-positions can refer to unbound versions, we avoid using
@@ -51,7 +56,7 @@ export class SparseIndices extends SparseItems<number> {
    * Returns a new, empty SparseIndices.
    */
   static new(): SparseIndices {
-    return new SparseIndices([]);
+    return new SparseIndices(null);
   }
 
   /**
@@ -61,39 +66,37 @@ export class SparseIndices extends SparseItems<number> {
    * @throws If the serialized form is invalid (see `SparseIndices.serialize`).
    */
   static deserialize(serialized: SerializedSparseIndices): SparseIndices {
-    return new SparseIndices(deserializeItems(serialized, indexesItemer));
-  }
+    // We can't use deserializeItems because we distinguish present vs deleted nodes
+    // by index parity, not by type.
 
-  /**
-   * Returns a new SparseIndices with the given keys (indices).
-   *
-   * The keys must be in order by index.
-   *
-   * @see SparseIndices.keys
-   */
-  static fromKeys(keys: Iterable<number>): SparseIndices {
-    const pairs: Pair<number>[] = [];
-    let curLength = 0;
+    // To make constructing custom saved states easier, we tolerate
+    // 0-length items and trailing deleted items.
 
-    for (const index of keys) {
-      if (index < curLength) {
+    const startHolder: { next: Node<number> | null } = { next: null };
+    let previous = startHolder;
+    for (let i = 0; i < serialized.length; i++) {
+      const maybeItem = serialized[i];
+      if (!Number.isSafeInteger(maybeItem) || maybeItem < 0) {
         throw new Error(
-          `Out-of-order index in entries: ${index}, previous was ${
-            curLength - 1
-          }`
+          `Invalid ${
+            i % 2 === 0 ? "present" : "delete"
+          } count at serialized[${i}]: ${maybeItem}`
         );
       }
+      if (maybeItem === 0) continue;
 
-      if (index === curLength && pairs.length !== 0) {
-        pairs[pairs.length - 1].item++;
+      let node: Node<number>;
+      if (i % 2 === 1) {
+        // Deleted node.
+        node = new DeletedNode(maybeItem);
       } else {
-        checkIndex(index);
-        pairs.push({ index, item: 1 });
+        // Present node.
+        node = new NumberNode(maybeItem);
       }
-      curLength = index + 1;
+      previous = append(previous, node);
     }
 
-    return new SparseIndices(pairs);
+    return new SparseIndices(startHolder.next);
   }
 
   /**
@@ -102,7 +105,19 @@ export class SparseIndices extends SparseItems<number> {
    * See SerializedSparseIndices for a description of the format.
    */
   serialize(): SerializedSparseIndices {
-    return super.serialize();
+    // Because both present and deleted nodes serialize to numbers, we
+    // distinguish them by parity: present at even index, deleted at odd index.
+    // In particular, we always start with a present element, even if it's 0.
+    const savedState: number[] = [];
+    let previousEndIndex = 0;
+    for (const [index, count] of this.items()) {
+      if (savedState.length === 0) {
+        if (index === 0) savedState.push(count);
+        else savedState.push(0, index, count);
+      } else savedState.push(index - previousEndIndex, count);
+      previousEndIndex = index + count;
+    }
+    return savedState;
   }
 
   newSlicer(): IndicesSlicer {
@@ -110,9 +125,19 @@ export class SparseIndices extends SparseItems<number> {
   }
 
   /**
+   * Iterates over the present items, in order.
+   *
+   * Each item [index, count] indicates a run of `count` present values starting at index,
+   * ending at a deleted index.
+   */
+  items(): IterableIterator<[index: number, count: number]> {
+    return super.items();
+  }
+
+  /**
    * Sets values to be present, starting at index.
    *
-   * That is, sets all values in the range [index, index + values.length) to be present.
+   * That is, sets all values in the range [index, index + count) to be present.
    *
    * @returns A SparseIndices describing the previous values' presence.
    * Index 0 in the returned array corresponds to `index` in this array.
@@ -121,43 +146,36 @@ export class SparseIndices extends SparseItems<number> {
     return this._set(index, count);
   }
 
-  protected construct(pairs: Pair<number>[]): this {
-    return new SparseIndices(pairs) as this;
+  protected construct(start: Node<number> | null): this {
+    return new SparseIndices(start) as this;
   }
 
-  protected itemer() {
-    return indexesItemer;
+  protected newNode(item: number): PresentNode<number> {
+    return new NumberNode(item);
   }
 }
 
-const indexesItemer: Itemer<number> = {
-  isValid(allegedItem: unknown): boolean {
-    return Number.isSafeInteger(allegedItem) && <number>allegedItem >= 0;
-  },
+class NumberNode extends PresentNode<number> {
+  constructor(public item: number) {
+    super();
+  }
 
-  newEmpty(): number {
-    return 0;
-  },
+  get length(): number {
+    return this.item;
+  }
 
-  length(item: number): number {
-    return item;
-  },
+  splitContent(index: number): PresentNode<number> {
+    const after = new NumberNode(this.item - index);
+    this.item = index;
+    return after;
+  }
 
-  merge(a: number, b: number): number {
-    return a + b;
-  },
+  tryMergeContent(other: PresentNode<number>): boolean {
+    this.item += (other as NumberNode).item;
+    return true;
+  }
 
-  slice(item: number, start?: number, end?: number): number {
-    const realStart = start === undefined ? 0 : Math.min(start, item);
-    const realEnd = end === undefined ? item : Math.min(end, item);
-    return realEnd - realStart;
-  },
-
-  update(item: number, index: number, replace: number): number {
-    return Math.max(item, index + replace);
-  },
-
-  shorten(_item: number, newLength: number): number {
-    return newLength;
-  },
-} as const;
+  sliceItem(start?: number, end?: number): number {
+    return (end ?? this.item) - (start ?? 0);
+  }
+}

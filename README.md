@@ -19,9 +19,7 @@ However, it is additionally optimized for the following tasks:
 3.  Convert between a count `c` and the `c`-th present entry.
 
 For ordinary array tasks, `SparseArray` aims to have comparable
-memory usage and acceptable speed relative to an ordinary `Array`. However, indexed accesses are slower
-in principle, due to internal searches (similar to balanced-tree
-collections).
+memory usage and acceptable speed relative to an ordinary `Array`. However, indexed accesses are slower, due to internal searches.
 
 For special cases, `SparseString` and `SparseIndices` implement the same functionality with additional optimizations:
 
@@ -29,12 +27,10 @@ For special cases, `SparseString` and `SparseIndices` implement the same functio
   but it uses strings (e.g. `"abc"`) instead of arrays (e.g. `["a", "b", "c"]`) in its internal state
   and serialized form.
   This typically uses less memory (2x in our benchmarks) and results in smaller JSON,
-  though with a slight cost in mutation speed.
+  though with a slight cost in mutation speed. `SparseString<E>` can also contain embedded objects of type `E` (e.g., an image inline in a text document), each taking the place of one char.
 - `SparseIndices` is functionally identical to a `SparseArray`, except that
   it only stores which indices are present, not their associated values.
   This typically uses much less memory (4x in our benchmarks) and results in much smaller JSON.
-
-> **Disclaimer:** This library is still in alpha. I have unit & fuzz tested the core functionality, but not every edge case or utility function. <!-- TODO: remove -->
 
 ### Example Use Cases
 
@@ -43,7 +39,7 @@ I use this package in collaborative situations, where individual users perform a
 <a id="collaborative-text-editing"></a>
 
 1. **Collaborative text/list editing:** Group sequential insertions by a single user into "bunches", which map a bunch ID to its sequence of values. Later, some values may be deleted, making the sequence sparse.
-   - This is how [list-positions](https://github.com/mweidner037/list-positions#readme) represents the state of a `List`: as a `Map<bunchID, SparseArray>`.
+   - This is how [list-positions](https://github.com/mweidner037/list-positions#readme) represents the state of a `List<T>`: as a `Map<bunchID, SparseArray<T>>`.
 2. **General collaboration or peer-to-peer networking:** Track which messages you've received from another user/peer using a `SparseIndices`. Typically, this will be a single number ("all messages 0 through n-1"), but dropped/reverted messages could make the indices sparse.
    - A `Map<peerID, SparseIndices>` generalizes vector clocks and provides a space-optimized alternative to dotted vector clocks, described [here](https://mattweidner.com/2023/09/26/crdt-survey-3.html#tracking-operations-vector-clocks-1).
 
@@ -78,26 +74,22 @@ arr.has(0); // false
 // Length is the last present index + 1 (or 0 if empty).
 console.log(arr.length); // Prints 5
 // Note: All methods accept index arguments `>= this.length`, acting as if
-// the array ends with infinitely many holes.
+// the array ends with infinitely many deleted indices (empty slots).
 ```
 
 Queries that only consider present values:
 
 ```ts
-const arr2 = SparseArray.fromEntries([
-  [0, "e"],
-  [1, "f"],
-  [5, "g"],
-  [6, "h"],
-]);
+const arr2 = SparseArray.new<string>();
+arr2.set(0, "e");
+arr2.set(1, "f");
+arr2.set(5, "g");
+arr2.set(6, "h");
 
 // Total present values.
 arr2.count(); // 4
 
-// Present values within a given slice.
-arr2.countBetween(0, 4); // 2
-
-// Present values up to but excluding a given index, plus whether that index is present.
+// Present values up to but excluding a given index.
 arr2.countAt(4); // 2
 arr2.countAt(6); // 3
 
@@ -108,7 +100,7 @@ arr2.indexOfCount(5); // -1
 arr2.indexOfCount(1000); // -1
 ```
 
-Bulk mutations are specially optimized:
+Bulk mutations are specifically optimized:
 
 ```ts
 const arr3 = SparseArray.new<string>();
@@ -135,22 +127,22 @@ console.log(previous.length); // Prints 2 (last present index + 1) - not necessa
 
 The serialized form, `SerializedSparseArray<T>`, uses run-length encoded deletions. Specifically, it is an array that alternates between:
 
-- arrays of present values (even indices), and
-- numbers (odd indices), representing that number of deleted values.
+- arrays of present values, and
+- numbers, representing that number of deleted indices (empty slots).
 
 For example:
 
 ```ts
-const arr4 = SparseArray.fromEntries([
-  [0, "foo"],
-  [1, "bar"],
-  [5, "X"],
-  [6, "yy"],
-]);
+const arr4 = SparseArray.new<string>();
+arr4.set(0, "foo");
+arr4.set(1, "bar");
+arr4.set(5, "X");
+arr4.set(6, "yy");
+
 console.log(arr4.serialize()); // Prints [['foo', 'bar'], 3, ['X', 'yy']]
 ```
 
-Deserialize with `const arr3 = SparseArray.fromSerialized(serialized)`.
+Deserialize with `const arr3 = SparseArray.deserialize(serialized)`.
 
 `arr.toString()` returns the JSON-encoded serialized form.
 
@@ -168,11 +160,9 @@ Iterators (`entries`, `keys`, `newSlicer`) are invalidated by concurrent mutatio
 
 ## Internals
 
-Internally, the state of a `SparseArray<T>` as stored as an `Array<{ index: number, values: T[] }>`, indicating that a run of present `values` starts at `index`. These pairs are in order by `index` and always have deleted values in between them.
+Internally, the state of a `SparseArray<T>` is stored as a singly-linked list of nodes, where each node represents either an array of present values or a number of deleted indices. The nodes are normalized so that they are never empty and adjacent nodes cannot be merged any further. In other words, a `SparseArray<T>`'s internal state is a singly-linked list representation of its serialized state. (Exception: The linked list may end with a deleted node, while the serialized state will not.)
 
-When the state can be represented as an ordinary `Array` - i.e., it is not sparse except for holes at the end - it may be stored as such. This saves some memory in our text-editing benchmarks, which create many (~10k) small sparse arrays, a decent fraction of which are not sparse.
-
-To reduce repetition and code size, most functionality for the three exported classes (`SparseArray`, `SparseString`, `SparseIndices`) is inherited from a common superclass, `SparseItems<I>`. It is a template class that defines mutations and queries in terms of "items" of type `I`, which represent a run of present values: `T[]` for `SparseArray`, `string` for `SparseString`, `number` for `SparseIndices`.
+To reduce repetition and code size, most functionality for the three exported classes (`SparseArray`, `SparseString`, `SparseIndices`) is inherited from a common superclass, `SparseItems<I>`. It is a template class that defines mutations and queries in terms of items of type `I`, which are the content of present nodes: `T[]` for `SparseArray`, `string | E` for `SparseString<E>`, `number` for `SparseIndices`.
 
 ## Performance
 
@@ -184,10 +174,10 @@ Results:
 
 | Implementation | Total time (ms) | Ending memory usage (MB) |
 | -------------- | --------------- | ------------------------ |
-| SparseArray    | 59.3 +- 5.4     | 1.98                     |
-| SparseString   | 67.5 +- 9.5     | 1.13                     |
-| SparseIndices  | 53.2 +- 1.5     | 0.48                     |
-| PlainArray     | 89.3 +- 1.1     | 2.02                     |
-| PlainArray2    | 60.7 +- 2.8     | 1.90                     |
+| SparseArray    | 81.2 +- 9.0     | 1.91                     |
+| SparseString   | 80.9 +- 5.8     | 1.10                     |
+| SparseIndices  | 63.3 +- 7.5     | 0.47                     |
+| PlainArray     | 76.7 +- 10.5    | 2.02                     |
+| PlainArray2    | 51.8 +- 6.9     | 1.90                     |
 
-For additional microbenchmarks, see [benchmark_results.md](./benchmark_results.md), which reports the time to perform 1,000,000 operations of various types (implemented in [benchmarks/traces.ts](./benchmarks/traces.ts)).
+For additional microbenchmarks, see [benchmark_results.txt](./benchmark_results.txt), which reports the time to perform 1,000,000 operations of various types (implemented in [benchmarks/traces.ts](./benchmarks/traces.ts)).

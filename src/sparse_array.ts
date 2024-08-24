@@ -1,19 +1,22 @@
-import { Itemer, Pair, SparseItems, deserializeItems } from "./sparse_items";
-import { checkIndex } from "./util";
+import {
+  Node,
+  PresentNode,
+  SparseItems,
+  deserializeItems,
+} from "./sparse_items";
 
 /**
  * Serialized form of a `SparseArray<T>`.
  *
  * The serialized form uses a compact JSON representation with run-length encoded deletions. It alternates between:
- * - arrays of present values (even indices), and
- * - numbers (odd indices), representing that number of deleted values.
+ * - arrays of present values, and
+ * - numbers, representing that number of deleted indices (empty slots).
  *
  * For example, the sparse array `["foo", "bar", , , , "X", "yy"]` serializes to
  * `[["foo", "bar"], 3, ["X", "yy"]]`.
  *
- * Trivial entries (empty arrays, 0s, & trailing deletions) are always omitted,
- * except that the 0th entry may be an empty array.
- * For example, the sparse array `[, , "biz", "baz"]` serializes to `[[], 2, ["biz", "baz"]]`.
+ * Trivial entries (empty arrays, 0s, & trailing deletions) are always omitted.
+ * For example, the sparse array `[, , "biz", "baz"]` serializes to `[2, ["biz", "baz"]]`.
  */
 export type SerializedSparseArray<T> = (T[] | number)[];
 
@@ -50,13 +53,12 @@ export interface ArraySlicer<T> {
  * 3. Convert between a count `c` and the `c`-th present entry.
  *
  * For ordinary array tasks, SparseArray aims to have comparable
- * memory usage and acceptable speed relative to an ordinary Array. However, indexed accesses are slower
- * in principle, due to internal searches (similar to balanced-tree
- * collections).
+ * memory usage and acceptable speed relative to an ordinary Array.
+ * However, indexed accesses are slower, due to internal searches.
  *
- * To construct a SparseArray, use the static `new`, `fromEntries`, or `deserialize` methods.
+ * To construct a SparseArray, use the static `new` or `deserialize` methods.
  *
- * @see SparseString For a memory-optimized array of chars.
+ * @see SparseString For a memory-optimized array of chars and (optional) embedded objects.
  * @see SparseIndices To track a sparse array's present indices independent of its values.
  */
 export class SparseArray<T> extends SparseItems<T[]> {
@@ -66,11 +68,9 @@ export class SparseArray<T> extends SparseItems<T[]> {
    * Returns a new, empty SparseArray.
    */
   static new<T>(): SparseArray<T> {
-    return new SparseArray([]);
+    return new SparseArray(null);
   }
 
-  // OPT: unsafe version that skips internal T[] clones?
-  // For faster loading direct from JSON (w/o storing refs elsewhere).
   /**
    * Returns a new SparseArray by deserializing the given state
    * from `SparseArray.serialize`.
@@ -79,42 +79,13 @@ export class SparseArray<T> extends SparseItems<T[]> {
    */
   static deserialize<T>(serialized: SerializedSparseArray<T>): SparseArray<T> {
     return new SparseArray(
-      deserializeItems(serialized, arrayItemer as Itemer<T[]>)
+      deserializeItems(serialized, (allegedItem) => {
+        if (!Array.isArray(allegedItem)) {
+          throw new Error(`Invalid entry in serialized state: ${allegedItem}`);
+        }
+        return new ArrayNode<T>((allegedItem as T[]).slice());
+      })
     );
-  }
-
-  /**
-   * Returns a new SparseArray with the given entries.
-   *
-   * The entries must be in order by index.
-   *
-   * @see SparseArray.entries
-   */
-  static fromEntries<T>(
-    entries: Iterable<[index: number, value: T]>
-  ): SparseArray<T> {
-    const pairs: Pair<T[]>[] = [];
-    let curLength = 0;
-
-    for (const [index, value] of entries) {
-      if (index < curLength) {
-        throw new Error(
-          `Out-of-order index in entries: ${index}, previous was ${
-            curLength - 1
-          }`
-        );
-      }
-
-      if (index === curLength && pairs.length !== 0) {
-        pairs[pairs.length - 1].item.push(value);
-      } else {
-        checkIndex(index);
-        pairs.push({ index, item: [value] });
-      }
-      curLength = index + 1;
-    }
-
-    return new SparseArray(pairs);
   }
 
   /**
@@ -144,15 +115,23 @@ export class SparseArray<T> extends SparseItems<T[]> {
 
   /**
    * Iterates over the present [index, value] pairs, in order.
-   *
-   * @see SparseArray.fromEntries
    */
   *entries(): IterableIterator<[index: number, value: T]> {
-    for (const pair of this.asPairs()) {
-      for (let j = 0; j < pair.item.length; j++) {
-        yield [pair.index + j, pair.item[j]];
+    for (const [index, item] of this.items()) {
+      for (let j = 0; j < item.length; j++) {
+        yield [index + j, item[j]];
       }
     }
+  }
+
+  /**
+   * Iterates over the present items, in order.
+   *
+   * Each item [index, values] indicates a run of present values starting at index,
+   * ending at a deleted index.
+   */
+  items(): IterableIterator<[index: number, values: T[]]> {
+    return super.items();
   }
 
   /**
@@ -168,47 +147,36 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return this._set(index, values);
   }
 
-  protected construct(pairs: Pair<T[]>[]): this {
-    return new SparseArray(pairs) as this;
+  protected construct(start: Node<T[]> | null): this {
+    return new SparseArray(start) as this;
   }
 
-  protected itemer() {
-    return arrayItemer as Itemer<T[]>;
+  protected newNode(item: T[]): PresentNode<T[]> {
+    return new ArrayNode(item);
   }
 }
 
-const arrayItemer: Itemer<unknown[]> = {
-  isValid(allegedItem: unknown): boolean {
-    return Array.isArray(allegedItem);
-  },
+class ArrayNode<T> extends PresentNode<T[]> {
+  constructor(public item: T[]) {
+    super();
+  }
 
-  newEmpty(): unknown[] {
-    return [];
-  },
+  get length(): number {
+    return this.item.length;
+  }
 
-  length(item: unknown[]): number {
-    return item.length;
-  },
+  splitContent(index: number): PresentNode<T[]> {
+    const after = new ArrayNode(this.item.slice(index));
+    this.item.length = index;
+    return after;
+  }
 
-  merge(a: unknown[], b: unknown[]): unknown[] {
-    a.push(...b);
-    return a;
-  },
+  tryMergeContent(other: PresentNode<T[]>): boolean {
+    this.item.push(...(other as ArrayNode<T>).item);
+    return true;
+  }
 
-  slice(item: unknown[], start?: number, end?: number | undefined): unknown[] {
-    return item.slice(start, end);
-  },
-
-  update(item: unknown[], start: number, replace: unknown[]): unknown[] {
-    if (start === item.length) item.push(...replace);
-    else {
-      for (let i = 0; i < replace.length; i++) item[start + i] = replace[i];
-    }
-    return item;
-  },
-
-  shorten(item: unknown[], newLength: number): unknown[] {
-    item.length = newLength;
-    return item;
-  },
-} as const;
+  sliceItem(start?: number, end?: number): T[] {
+    return this.item.slice(start, end);
+  }
+}
