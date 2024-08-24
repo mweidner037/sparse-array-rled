@@ -11,7 +11,7 @@ import {
  * The serialized form uses a compact JSON representation with run-length encoded deletions. It consists of:
  * - strings of concatenated present chars,
  * - embedded objects of type `E`, and
- * - numbers, representing that number of deleted chars.
+ * - numbers, representing that number of deleted indices.
  *
  * For example, the sparse string `["a", "b", , , , "f", "g"]` serializes to `["ab", 3, "fg"]`.
  *
@@ -38,8 +38,7 @@ export interface StringSlicer<E extends object | never = never> {
    * continuing from the previous index (inclusive) to endIndex (exclusive).
    *
    * Each item [index, charsOrEmbed] indicates either a run of present chars or a single embed,
-   * starting at index and ending at either endIndex, a deleted value, or a value of the opposite type
-   * (char vs embed).
+   * starting at index and ending at either endIndex, a deleted index, an embed, or a char following an embed.
    *
    * The first call starts at index 0. To end at the end of the array,
    * set `endIndex = null`.
@@ -67,8 +66,7 @@ export interface StringSlicer<E extends object | never = never> {
  *
  * @see SparseIndices To track a sparse array's present indices independent of its values.
  * @typeParam E - The type of embeds, or `never` (no embeds allowed) if not specified.
- * Embeds must be non-null objects. (Although TypeScript's `object` allows null, this implementation
- * does not.)
+ * Embeds must be non-null objects.
  */
 export class SparseString<E extends object | never = never> extends SparseItems<
   string | E
@@ -87,8 +85,8 @@ export class SparseString<E extends object | never = never> extends SparseItems<
    * from `SparseString.serialize`.
    *
    * @throws If the serialized form is invalid (see `SparseString.serialize`).
-   * Note that an error is *not* thrown if the serialized form contains embeds
-   * not matching type `E`, since generic types are erased during compilation.
+   * Note that we do **not** check whether it contains embeds that fail to
+   * match type `E`.
    */
   static deserialize<E extends object | never = never>(
     serialized: SerializedSparseString<E>
@@ -101,7 +99,7 @@ export class SparseString<E extends object | never = never> extends SparseItems<
           // We exclude null as it is not assignable to TypeScript's `object` type.
           return new EmbedNode(allegedItem as E);
         } else {
-          throw new Error(`Invalid item in serialized state: ${allegedItem}`);
+          throw new Error(`Invalid entry in serialized state: ${allegedItem}`);
         }
       })
     );
@@ -150,8 +148,7 @@ export class SparseString<E extends object | never = never> extends SparseItems<
    * Iterates over the present items, in order.
    *
    * Each item [index, charsOrEmbed] indicates either a run of present chars or a single embed,
-   * starting at index and ending at either a deleted value or a value of the opposite type
-   * (char vs embed).
+   * starting at index and ending at either a deleted index, an embed, or a char following an embed.
    */
   items(): IterableIterator<[index: number, charsOrEmbed: string | E]> {
     return super.items();

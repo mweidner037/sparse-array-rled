@@ -10,7 +10,7 @@ import {
  *
  * The serialized form uses a compact JSON representation with run-length encoded deletions. It alternates between:
  * - arrays of present values, and
- * - numbers, representing that number of deleted values.
+ * - numbers, representing that number of deleted indices (empty slots).
  *
  * For example, the sparse array `["foo", "bar", , , , "X", "yy"]` serializes to
  * `[["foo", "bar"], 3, ["X", "yy"]]`.
@@ -53,13 +53,12 @@ export interface ArraySlicer<T> {
  * 3. Convert between a count `c` and the `c`-th present entry.
  *
  * For ordinary array tasks, SparseArray aims to have comparable
- * memory usage and acceptable speed relative to an ordinary Array. However, indexed accesses are slower
- * in principle, due to internal searches (similar to balanced-tree
- * collections).
+ * memory usage and acceptable speed relative to an ordinary Array.
+ * However, indexed accesses are slower, due to internal searches.
  *
  * To construct a SparseArray, use the static `new` or `deserialize` methods.
  *
- * @see SparseString For a memory-optimized array of chars.
+ * @see SparseString For a memory-optimized array of chars and (optional) embedded objects.
  * @see SparseIndices To track a sparse array's present indices independent of its values.
  */
 export class SparseArray<T> extends SparseItems<T[]> {
@@ -72,8 +71,6 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return new SparseArray(null);
   }
 
-  // OPT: unsafe version that skips internal T[] clones?
-  // For faster loading direct from JSON (w/o storing refs elsewhere).
   /**
    * Returns a new SparseArray by deserializing the given state
    * from `SparseArray.serialize`.
@@ -84,7 +81,7 @@ export class SparseArray<T> extends SparseItems<T[]> {
     return new SparseArray(
       deserializeItems(serialized, (allegedItem) => {
         if (!Array.isArray(allegedItem)) {
-          throw new Error(`Invalid item in serialized state: ${allegedItem}`);
+          throw new Error(`Invalid entry in serialized state: ${allegedItem}`);
         }
         return new ArrayNode<T>((allegedItem as T[]).slice());
       })
@@ -125,6 +122,16 @@ export class SparseArray<T> extends SparseItems<T[]> {
         yield [index + j, item[j]];
       }
     }
+  }
+
+  /**
+   * Iterates over the present items, in order.
+   *
+   * Each item [index, values] indicates a run of present values starting at index,
+   * ending at a deleted index.
+   */
+  items(): IterableIterator<[index: number, values: T[]]> {
+    return super.items();
   }
 
   /**

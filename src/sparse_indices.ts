@@ -5,17 +5,18 @@ import {
   DeletedNode,
   append,
 } from "./sparse_items";
+
 /**
  * Serialized form of a SparseIndices.
  *
  * The serialized form uses a compact JSON representation with run-length encoding. It alternates between:
  * - counts of present values (even indices), and
- * - counts of deleted values (odd indices).
+ * - counts of deletions (odd indices).
  *
  * For example, the sparse array `[true, true, , , , true, true]` serializes to `[2, 3, 2]`.
  *
  * Trivial entries (0s & trailing deletions) are always omitted,
- * except that the 0th entry may be 0.
+ * except that the first entry may be 0.
  * For example, the sparse array `[, , true, true, true]` serializes to `[0, 2, 3]`.
  */
 export type SerializedSparseIndices = number[];
@@ -109,18 +110,28 @@ export class SparseIndices extends SparseItems<number> {
     // In particular, we always start with a present element, even if it's 0.
     const savedState: number[] = [];
     let previousEndIndex = 0;
-    for (const [index, length] of this.items()) {
+    for (const [index, count] of this.items()) {
       if (savedState.length === 0) {
-        if (index === 0) savedState.push(length);
-        else savedState.push(0, index, length);
-      } else savedState.push(index - previousEndIndex, length);
-      previousEndIndex = index + length;
+        if (index === 0) savedState.push(count);
+        else savedState.push(0, index, count);
+      } else savedState.push(index - previousEndIndex, count);
+      previousEndIndex = index + count;
     }
     return savedState;
   }
 
   newSlicer(): IndicesSlicer {
     return super.newSlicer();
+  }
+
+  /**
+   * Iterates over the present items, in order.
+   *
+   * Each item [index, count] indicates a run of `count` present values starting at index,
+   * ending at a deleted index.
+   */
+  items(): IterableIterator<[index: number, count: number]> {
+    return super.items();
   }
 
   /**

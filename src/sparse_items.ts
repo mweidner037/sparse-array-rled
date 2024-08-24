@@ -10,7 +10,7 @@ export abstract class PresentNode<I> {
   abstract readonly length: number;
 
   /**
-   * Set this one to the first half in-place; return a new second half. Don't update next pointers.
+   * Set this node to the first half in-place; return a new second half. Don't update next pointers.
    *
    * @param index 0 < index < length
    */
@@ -24,7 +24,7 @@ export abstract class PresentNode<I> {
   /**
    * Return a slice of this.item, as a shallow copy.
    *
-   * Default to 0/this.length; don't need to do slice() wrapping.
+   * Default to 0/this.length; don't need to do wraparound like Array.slice().
    * Guaranteed non-empty ((start ?? 0) < (end ?? length)).
    */
   abstract sliceItem(start?: number, end?: number): I;
@@ -34,7 +34,7 @@ export class DeletedNode<I> {
   next: Node<I> | null = null;
   constructor(public length: number) {}
   /**
-   * Set this one to the first half in-place; return a new second half. Don't update next pointers.
+   * Set this node to the first half in-place; return a new second half. Don't update next pointers.
    *
    * @param index 0 < index < length
    */
@@ -60,10 +60,13 @@ export interface ItemSlicer<I> {
    * continuing from the previous index (inclusive) to endIndex (exclusive).
    *
    * Each item [index, item] indicates a run of present values starting at index,
-   * ending at either endIndex or a deleted index.
+   * ending at either endIndex, a deleted index, or a value that cannot be merged
+   * with the item.
    *
    * The first call starts at index 0. To end at the end of the array,
    * set `endIndex = null`.
+   *
+   * @throws If endIndex is less than the previous index.
    */
   nextSlice(endIndex: number | null): Array<[index: number, item: I]>;
 }
@@ -74,14 +77,14 @@ export interface ItemSlicer<I> {
  * It contains code that can be implemented in common, using generic "items" of
  * type I. Each item represents a run of present values.
  * - SparseArray<T>: T[]
- * - SparseString: string
+ * - SparseString<E>: string | E
  * - SparseIndices: number (count of present values).
  *
- * @typeParam I The type of items. Items must never be null.
+ * @typeParam I - The type of items.
  */
 export abstract class SparseItems<I> {
   /**
-   * A linked list of nodes.
+   * A singly-linked list of nodes.
    *
    * Neighboring nodes are always merged when possible. However, the list
    * is not necessarily trimmed: it may end in a (redundant) DeletedNode,
@@ -112,10 +115,10 @@ export abstract class SparseItems<I> {
    * present values.
    *
    * All methods accept index arguments `>= this.length`, acting as if
-   * the array ends with infinitely many holes.
+   * the array ends with infinitely many deleted indices (empty slots).
    *
    * Note: Unlike an ordinary `Array`, you cannot explicitly set the length
-   * to include additional holes.
+   * to include additional deleted indices.
    */
   get length(): number {
     if (this.next === null) return 0;
@@ -171,7 +174,7 @@ export abstract class SparseItems<I> {
    * Returns the count at index.
    *
    * The "count at index" is the number of present values up to but excluding index.
-   * Equivalent, it is the `c` such that index is
+   * Equivalently, it is the `c` such that index is
    * the `c`-th present value (or would be if present).
    *
    * Invert with indexOfCount.
@@ -184,10 +187,9 @@ export abstract class SparseItems<I> {
 
   /**
    * Returns whether the array has no present values.
-   *
-   * Note that an array may be empty but have nonzero length.
    */
   isEmpty(): boolean {
+    // This is equivalent to checking length === 0, but faster.
     return (
       this.next === null ||
       (this.next instanceof DeletedNode && this.next.next === null)
@@ -197,7 +199,11 @@ export abstract class SparseItems<I> {
   /**
    * @ignore Internal templated version of `get`.
    *
-   * Returns the value at index, in the form [item, offset within item].
+   * Returns the value at index, in the form [item, offset within item],
+   * or null if not present.
+   *
+   * **Warning:** item is aliased with our internal state. It must not be
+   * mutated and may mutate unexpectedly.
    *
    * @throws If `index < 0`. (It is okay for index to exceed `this.length`.)
    */
@@ -269,20 +275,10 @@ export abstract class SparseItems<I> {
 
   /**
    * Returns a "slicer" that enumerates slices of the array in order.
-   *
-   * The slicer is more efficient than requesting each slice separately,
-   * since it "remembers its place" in our internal state.
    */
   newSlicer(): ItemSlicer<I> {
     return new PairSlicer(this.next);
   }
-
-  // *items(): IterableIterator<[index: number, item: I]> {
-  //   for (const pair of this.asPairs()) {
-  //     // Always slice, to prevent exposing internal items.
-  //     yield [pair.index, this.itemer().slice(pair.item)];
-  //   }
-  // }
 
   /**
    * Iterates over the present indices (keys), in order.
@@ -303,7 +299,7 @@ export abstract class SparseItems<I> {
    * Iterates over the present items, in order.
    *
    * Each item [index, values] indicates a run of present values starting at index,
-   * ending at a deleted index.
+   * ending at either a deleted index or a value that cannot be merged with the run.
    */
   *items(): IterableIterator<[index: number, values: I]> {
     let index = 0;
@@ -415,14 +411,13 @@ export abstract class SparseItems<I> {
     if (node.length === 0) return this.construct(null);
 
     /*
-      We locate the left and right boundaries of node, extending the list and
-      splitting existing nodes as necessary so that both occur at the boundaries
-      of existing nodes:
+      We locate the left and right boundaries of node's desired range, extending the list and
+      splitting existing nodes as necessary so that both occur between existing nodes:
       
-                     -->               node                -->
+                     -->        n     o     d     e        -->
       --> beforeLeft --> afterLeft --> ... --> beforeRight --> afterRight -->
                       ^                                     ^
-                      left                                  right
+                      left boundary                         right boundary
       
       To perform the overwrite, we splice in node, also remembering the replaced
       list `afterLeft --> ... --> beforeRight --> null`.
@@ -433,7 +428,7 @@ export abstract class SparseItems<I> {
     }
 
     if (this.next.next === null && this.next.length === index) {
-      // Common case opt: Appending to non-sparse array (single node).
+      // Common case opt: Appending to a non-sparse array (single node).
       if (node instanceof PresentNode) append(this.next, node);
       return this.construct(null);
     }
@@ -453,6 +448,7 @@ export abstract class SparseItems<I> {
     const beforeRight = createSplit(beforeLeft.next, node.length);
     const afterRight = beforeRight.next;
 
+    // Perform the overwrite as described in the diagram above.
     beforeLeft.next = null;
     const appendedNode = append(beforeLeft, node);
     if (afterRight === null) appendedNode.next = null;
@@ -471,9 +467,9 @@ export abstract class SparseItems<I> {
 /**
  * Creates a split (node boundary) at delta in the given list, returning
  * the node before the split. If needed, the list is extended to length
- * delta using a DeletedNode<I>.
+ * delta using a DeletedNode.
  *
- * @param index Must be > 0.
+ * @param delta Must be > 0.
  * @returns The node just before the split.
  */
 function createSplit<I>(start: Node<I>, delta: number): Node<I> {
@@ -489,6 +485,8 @@ function createSplit<I>(start: Node<I>, delta: number): Node<I> {
  * Given delta > 0, returns the node containing that index and the offset within it.
  * The returned offset satisfies 0 < offset <= node.length, unless delta is outside
  * the list, in which case offset is greater and outside is true.
+ * 
+ * If delta is 0, returns [start, 0, false].
  */
 function locate<I>(
   start: Node<I>,
@@ -585,25 +583,13 @@ export function deserializeItems<I>(
  * Templated implementation of ItemSlicer, used by SparseItems.newSlicer.
  */
 class PairSlicer<I> implements ItemSlicer<I> {
-  /** First index in this.current. */
+  /** List index of the first value in this.current. */
   private currentIndex = 0;
   private offset = 0;
   private prevEnd: number | null = 0;
 
   constructor(private current: Node<I> | null) {}
 
-  /**
-   * Returns an array of items in the next slice,
-   * continuing from the previous index (inclusive) to endIndex (exclusive).
-   *
-   * Each item [index, item] indicates a present item starting at index,
-   * ending at either endIndex or a deleted index.
-   *
-   * The first call starts at index 0. To end at the end of the array,
-   * set `endIndex = null`.
-   *
-   * @throws If endIndex is less than the previous index.
-   */
   nextSlice(endIndex: number | null): Array<[index: number, item: I]> {
     if (endIndex !== null) {
       if (
@@ -624,6 +610,7 @@ class PairSlicer<I> implements ItemSlicer<I> {
       if (endIndex !== null && endIndex <= this.currentIndex) return ret;
       const currentEnd = this.currentIndex + this.current.length;
       if (endIndex === null || endIndex >= currentEnd) {
+        // Process what remains of this.current.
         if (this.current instanceof PresentNode) {
           ret.push([
             this.currentIndex + this.offset,
@@ -635,6 +622,7 @@ class PairSlicer<I> implements ItemSlicer<I> {
         this.current = this.current.next;
         this.offset = 0;
       } else {
+        // Process up to endOffset in this.current.
         const endOffset = endIndex - this.currentIndex;
         // Handle duplicate-endIndex case without empty emits.
         if (endOffset > this.offset) {
