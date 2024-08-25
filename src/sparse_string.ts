@@ -37,8 +37,8 @@ export interface StringSlicer<E extends object | never = never> {
    * Returns an array of items in the next slice,
    * continuing from the previous index (inclusive) to endIndex (exclusive).
    *
-   * Each item [index, charsOrEmbed] indicates either a run of present chars or a single embed,
-   * starting at index and ending at either endIndex, a deleted index, an embed, or a char following an embed.
+   * Each item [index, charsOrEmbed] is either an individual embed at index, or a run of
+   * present chars starting at index and ending at either endIndex, a deleted index, or an embed.
    *
    * The first call starts at index 0. To end at the end of the array,
    * set `endIndex = null`.
@@ -146,15 +146,15 @@ export class SparseString<E extends object | never = never> extends SparseItems<
   /**
    * Iterates over the present items, in order.
    *
-   * Each item [index, charsOrEmbed] indicates either a run of present chars or a single embed,
-   * starting at index and ending at either a deleted index, an embed, or a char following an embed.
+   * Each item [index, charsOrEmbed] is either an individual embed at index, or a run of
+   * present chars starting at index and ending at a deleted index or an embed.
    */
   items(): IterableIterator<[index: number, charsOrEmbed: string | E]> {
     return super.items();
   }
 
   /**
-   * Sets chars starting at index.
+   * Sets chars (or an embed) starting at index.
    *
    * That is, sets all values in the range [index, index + chars.length) to the
    * given chars.
@@ -162,16 +162,8 @@ export class SparseString<E extends object | never = never> extends SparseItems<
    * @returns A sparse string of the previous values.
    * Index 0 in the returned string corresponds to `index` in this string.
    */
-  set(index: number, chars: string): SparseString<E>;
-  /**
-   * Sets the value at index to the given embed.
-   *
-   * @returns A sparse string of the previous value.
-   * Index 0 in the returned string corresponds to `index` in this string.
-   */
-  set(index: number, embed: E): SparseString<E>;
-  set(index: number, item: string | E) {
-    return this._set(index, item);
+  set(index: number, charsOrEmbed: string | E): SparseString<E> {
+    return this._set(index, charsOrEmbed);
   }
 
   protected construct(start: Node<string> | null): this {
